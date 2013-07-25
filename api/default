@@ -8,18 +8,11 @@ ServerName localhost
     # Apache Configuration for Fluxvis
     ###############################################################
 
-    WSGIScriptAlias /flux/api "/usr/local/dev/fluxvis/api/bottle.wsgi"
-    <Directory "/usr/local/dev/fluxvis/api/">
+    # Python API
+    WSGIScriptAlias /flux/api "/usr/local/project/flux-python-api/api/bottle.wsgi"
+    <Directory "/usr/local/project/flux-python-api/api/">
         Order allow,deny
         Allow from all
-    </Directory>
-
-    Alias /fluxvis/ "/usr/local/dev/fluxvis/web/"
-    <Directory "/usr/local/dev/fluxvis/web/">
-        Order allow,deny
-        Options Indexes FollowSymLinks
-        Allow from all
-        IndexOptions FancyIndexing
     </Directory>
 
 </VirtualHost>

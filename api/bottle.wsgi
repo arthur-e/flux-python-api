@@ -1,6 +1,6 @@
 import sys, site, os
 
-sys.path = ['/usr/local/project/fluxvis/api/'] + sys.path
+sys.path = ['/usr/local/project/flux-python-api/api/'] + sys.path
 os.chdir(os.path.dirname(__file__))
 
 ############################
