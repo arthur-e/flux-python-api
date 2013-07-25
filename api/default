@@ -1,0 +1,25 @@
+NameVirtualHost *:80
+ServerName localhost
+
+<VirtualHost *:80>
+    ServerAdmin webmaster@localhost
+
+    ###############################################################
+    # Apache Configuration for Fluxvis
+    ###############################################################
+
+    WSGIScriptAlias /flux/api "/usr/local/dev/fluxvis/api/bottle.wsgi"
+    <Directory "/usr/local/dev/fluxvis/api/">
+        Order allow,deny
+        Allow from all
+    </Directory>
+
+    Alias /fluxvis/ "/usr/local/dev/fluxvis/web/"
+    <Directory "/usr/local/dev/fluxvis/web/">
+        Order allow,deny
+        Options Indexes FollowSymLinks
+        Allow from all
+        IndexOptions FancyIndexing
+    </Directory>
+
+</VirtualHost>
