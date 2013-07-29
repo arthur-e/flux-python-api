@@ -33,6 +33,26 @@ import numpy as np
 import scipy.io
 import h5py
 
+def bulk_hdf5_to_csv(dir_path, regex='^Month_Uncert[\.\w\-\d_]+.mat'):
+    '''
+    Generates many CSV files from a directory of HDF5 files.
+    '''
+    regex = re.compile(regex)
+    ls = os.listdir(dir_path)
+
+    for filename in ls:
+        if regex.match(filename) is None:
+            continue # Skip this file
+
+        # e.g. '/ws4/idata/fluxvis/casa_gfed_inversion_results/1.zerofull_casa_1pm_10twr/Month_Uncert1.mat'
+        f = h5py.File(path)
+
+        # With pandas, make a DataFrame from the NumPy array
+        df = pd.DataFrame(f.get(var_name)[:])
+
+        df.to_csv('1.zerofull_casa_1pm_10twr_' + filename.rstrip('.mat') + '.csv')
+
+
 def hdf5_to_dataframe(path, var_name, limit=None, dt=None):
     '''
     Creates a DataFrame from an HDF5 file of CASA GFED surface fluxes. Will

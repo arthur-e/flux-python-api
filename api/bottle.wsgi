@@ -27,5 +27,7 @@ sys.path[:0] = new_sys_path
 
 import bottle, core
 
+bottle.debug(True)
+
 # Do NOT use bottle.run() with mod_wsgi
 application = bottle.default_app()

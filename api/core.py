@@ -24,13 +24,23 @@ sys.path[:0] = new_sys_path
 
 import datetime
 from pymongo import MongoClient
-from bottle import route, run, abort, request, response, get
+from bottle import route, run, abort, request, response, get, hook
 
 DB = 'fluxvis'
 COLLECTION = 'casa_gfed_3hrly'
 CORS_HOST = 'http://localhost'
 
 client = MongoClient() # Defaults: MongoClient('localhost', 27017)
+
+@hook('after_request')
+def enable_cors():
+    response.headers['Access-Control-Allow-Origin'] = '*'
+
+
+@hook('after_request')
+def set_content_type():
+    response.content_type = 'application/json'
+
 
 @route('/casa-gfed/stats.json', method='GET')
 def casa_gfed_stats():
@@ -43,6 +53,9 @@ def casa_gfed_stats():
         'tags': False,
         '_id': False
     })
+
+    if query is None:
+        abort(404, 'Not Found')
 
     for each in ['timestamp_start', 'timestamp_end']:
         query[each] = datetime.datetime.strftime(query[each], '%Y-%m-%dT%H:%M:%S')
@@ -57,7 +70,7 @@ def casa_gfed_by_date():
     formatstring = request.query.timeformat or '%Y-%m-%dT%H:%M:%S'
 
     if len(datestring) == 0:
-        abort(500, 'Bad Request')
+        abort(400, 'Bad Request')
 
     # Consume and reproduce the datestring in the desired format
     dateobj = datetime.datetime.strptime(datestring, formatstring)
@@ -69,6 +82,9 @@ def casa_gfed_by_date():
     query = client[DB][COLLECTION].find_one({
         'timestamp': dateobj
     }, fields=['features'])
+
+    if query is None:
+        abort(404, 'Not Found')
 
     query['timestamp'] = datestring
 
@@ -83,12 +99,15 @@ def casa_gfed_by_date_geojson():
     collection_type = request.query.collection or 'features' # Or 'geometries'
 
     if len(datestring) == 0:
-        abort(500, 'Bad Request')
+        abort(400, 'Bad Request')
 
     # Consume and reproduce the datestring in the desired format
     dateobj = datetime.datetime.strptime(datestring, formatstring)
 
     query = client[DB][COLLECTION].find_one({'timestamp': dateobj})
+
+    if query is None:
+        abort(404, 'Not Found')
 
     if collection_type == 'features':
         response_body = {
