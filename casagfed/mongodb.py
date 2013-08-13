@@ -28,7 +28,7 @@ sys.path[:0] = new_sys_path
 import os, datetime, re
 # http://labix.org/python-dateutil or http://labix.org/download/python-dateutil/python-dateutil-1.5.tar.gz
 from dateutil.relativedelta import *
-from casagfed.io import *
+from io import *
 import json, csv, pprint
 import pandas as pd
 import numpy as np
@@ -38,9 +38,10 @@ from pymongo import MongoClient
 
 client = MongoClient() # Defaults: MongoClient('localhost', 27017)
 DB = 'fluxvis'
-COLLECTION = 'test'
-# PATH = '/gis_lab/project/NASA_ACOS_Visualization/Data/from_Vineet/data_casa_gfed_3hrly.mat'
-PATH = '/usr/local/dev/fluxvis/_data_/data_casa_gfed_3hrly.mat'
+COLLECTION = 'test_new'
+INDEX_COLLECTION = 'test_index'
+PATH = '/gis_lab/project/NASA_ACOS_Visualization/Data/from_Vineet/data_casa_gfed_3hrly.mat'
+#PATH = '/usr/local/dev/fluxvis/_data_/data_casa_gfed_3hrly.mat'
 
 def insert_bulk(path, var_name='casa_gfed_2004', col_num=None, dt=None, precision=2):
     '''
@@ -71,14 +72,12 @@ def insert_bulk(path, var_name='casa_gfed_2004', col_num=None, dt=None, precisio
     for timestamp, series in dfm.T.iterrows():
         # Grab the unique identifier returned from an insert operation
         j = client[DB][COLLECTION].insert({
-            '_id': i,
-            'tags': ['surface', 'flux'],
-            'timestamp': datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S'),
-            'features': [{
-                'coordinates': kv[0],
-                'flux': round(kv[1], precision)
-            } for kv in series.iterkv()]
+            '_id': datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S'),
+            'values': [ round(kv[1], precision) for kv in series.iterkv()]
         })
+        #Insert the cell coord index once only
+        if i == 1:
+            j = client[DB][INDEX_COLLECTION].insert({'i':[kv[0] for kv in series.iterkv()]})
 
         i += 1
 
@@ -86,6 +85,7 @@ def insert_bulk(path, var_name='casa_gfed_2004', col_num=None, dt=None, precisio
 def stats(path, var_name='casa_gfed_2004'):
     '''
     Calculates and returns summary statistics from CASA GFED surface fluxes.
+
     '''
     mat = scipy.io.loadmat(path)    
     intervals = mat[var_name].shape[1] - 2 # Number of fluxes (Subtract 2 fields, lng and lat)
