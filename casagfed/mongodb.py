@@ -1,3 +1,4 @@
+from __future__ import division
 import sys, site
 
 ############################
@@ -25,7 +26,7 @@ sys.path[:0] = new_sys_path
 # End setup
 ############
 
-import os, datetime, re
+import os, datetime, re, argparse
 # http://labix.org/python-dateutil or http://labix.org/download/python-dateutil/python-dateutil-1.5.tar.gz
 from dateutil.relativedelta import *
 from io import *
@@ -41,6 +42,7 @@ DB = 'fluxvis'
 COLLECTION = 'test_new'
 INDEX_COLLECTION = 'test_index'
 PATH = '/gis_lab/project/NASA_ACOS_Visualization/Data/from_Vineet/data_casa_gfed_3hrly.mat'
+SCN_PATH = '/usr/local/dev/data/casa_gfed_inversion_results'
 #PATH = '/usr/local/dev/fluxvis/_data_/data_casa_gfed_3hrly.mat'
 
 def insert_bulk(path, var_name='casa_gfed_2004', col_num=None, dt=None, precision=2):
@@ -81,6 +83,69 @@ def insert_bulk(path, var_name='casa_gfed_2004', col_num=None, dt=None, precisio
 
         i += 1
 
+def insert_covariance(scn, scn_path, col_num=None, dt=None, precision=5):
+    '''
+    Inserts covariance data. 
+    '''
+    def to_fixed(value):
+        return round(value, 5)
+    #Each scenario has one annual uncertainty file and twelve monthly uncertainty files
+    # so we need to fetch all of them. 
+ 
+    
+
+    p = '/'.join([scn_path,scn])
+    
+    
+    #Split the scenario id and the scenario name. Might want to use the scenario id later.
+    sid,scn = scn.split('.')
+
+    #Drop the old collection. It will be recreated when insert.
+    r = client[DB].drop_collection(scn)
+
+
+    #Start with annual uncertainty
+    df = h5py.File(p + '/Ann_Uncert.mat')
+    data = df.get('Ann_Uncert')[:]
+    df.close()
+    ann = {'_id':'annual','v':[]}
+    #Iterate over the data
+    i=0
+    for cov in data:
+        #FIXME
+        cov_limited = []
+        for val in cov:
+            cov_limited.append(to_fixed(val))
+        #collection name? scn_uncert? scenario number vs scenario name?
+        res = client[DB][scn].insert({'_id':'ann.'+`i`, 'v':cov_limited})
+        i+=1
+        update_progress(len(data), i, 'Ann_Uncert')
+    #Insert into mongo
+    #res = client[DB][scn].insert(ann)
+    t=0
+    #Rinse and repeat for each month
+    for m in range(1,13):
+        df = h5py.File(p + '/Month_Uncert'+`m`+'.mat')
+        data = df.get('Month_Uncert')[:]
+        df.close()
+        i=0
+        for cov in data:
+            #FIXME TOO
+            
+            cov_limited = []
+            for val in cov:
+                cov_limited.append(to_fixed(val))
+            res = client[DB][scn].insert({'_id':`m`+'.'+`i`, 'v':cov_limited})
+            i+=1
+            update_progress(len(data), i, 'Month_Uncert'+`m`)
+        
+
+def update_progress(tot, cur, title):
+    progress = (cur/tot) * 100
+    #sys.stdout.write('\r%.1f%%' % (progress))
+    upd = '\r'+title+' progress '+'[{0:20}] {1:.1f}%'.format('#' * int((progress)/5), progress)
+    sys.stdout.write(upd)
+    sys.stdout.flush()
 
 def stats(path, var_name='casa_gfed_2004'):
     '''
@@ -126,10 +191,30 @@ def stats(path, var_name='casa_gfed_2004'):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        insert_bulk(sys.argv[1], sys.argv[2], gzip=sys.argv[3])
+    p = argparse.ArgumentParser(description='CASA-GFED data import tool')
+    p.add_argument('-p','--path', type=str, 
+        help='Specify the directory containing scenario subdirectories')
+    p.add_argument('-s','--scenario', type=str, 
+        help='Specify the scenario. This must match the ')
+    p.add_argument('action', choices=['uncertainty','flux'],default='uncertainty',
+        help='Select the default action')
 
-    else:
+    args = p.parse_args()
+
+    if args.action == 'uncertainty':
+        if args.scenario == None:
+            p.error('--scenario must be set when action=uncertainty')
+        if args.path == None:
+            insert_covariance(args.scenario,SCN_PATH)
+        else:
+            insert_covariance(args.scenario,args.path)
+
+    elif args.action == 'flux':
         insert_bulk(PATH)
+        #insert_bulk(sys.argv[1], sys.argv[2], gzip=sys.argv[3])
+
+    
+
+        
 
 

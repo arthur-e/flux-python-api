@@ -66,7 +66,7 @@ def hdf5_to_dataframe(path, var_name, limit=None, dt=None):
         dt = datetime.datetime(2003, 12, 22, 3, 0, 0) # 2003-12-22 at 3 AM
 
     # Create column headers
-    intervals = mat[var_name].shape[1] - 2 # Number of fluxes (Subtract 2 fields, lng and lat)
+    intervals = f[var_name].shape[1] - 2 # Number of fluxes (Subtract 2 fields, lng and lat)
     cols = ['lng', 'lat']
     cols.extend([str(dt + relativedelta(hours=+(3*j))) for j in range(intervals)])
 
