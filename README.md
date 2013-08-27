@@ -1,3 +1,10 @@
+##########################
+# Installation and Setup #
+##########################
+
+    cat > /usr/local/pythonenv/fluxvis-env/lib/python2.7/site-packages/fluxpy.pth
+    # Write in: /usr/local/project/flux-python-api/
+
 ####################################
 # Working with CASA-GFED Flux Data #
 ####################################
