@@ -91,7 +91,6 @@ def insert_covariance(scn, scn_path, col_num=None, dt=None, precision=5):
     # Iterate over the data
     i = 0
     for cov in data:
-        #FIXME
         cov_limited = []
         for val in cov:
             cov_limited.append(to_fixed(val))
@@ -101,8 +100,6 @@ def insert_covariance(scn, scn_path, col_num=None, dt=None, precision=5):
         i+=1
         update_progress(len(data), i, 'Ann_Uncert', False)
 
-    #Insert into mongo
-    #res = client[DB][scn].insert(ann)
 
     t = 0
     #Rinse and repeat for each month
@@ -112,8 +109,6 @@ def insert_covariance(scn, scn_path, col_num=None, dt=None, precision=5):
         df.close()
         i=0
         for cov in data:
-            #FIXME TOO
-            
             cov_limited = []
             for val in cov:
                 cov_limited.append(to_fixed(val))
@@ -126,7 +121,6 @@ def insert_covariance(scn, scn_path, col_num=None, dt=None, precision=5):
 def update_progress(tot, cur, title, clear=False):
     if (clear == False):
         progress = (cur/tot) * 100
-        #sys.stdout.write('\r%.1f%%' % (progress))
         upd = '\r'+title+' progress '+'[{0:20}] {1:.1f}%'.format('#' * int((progress)/5), progress)
         sys.stdout.write(upd)
         sys.stdout.flush()
