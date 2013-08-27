@@ -12,8 +12,8 @@ from pymongo import MongoClient
 
 client = MongoClient() # Defaults: MongoClient('localhost', 27017)
 DB = 'fluxvis'
-COLLECTION = 'test_new'
-INDEX_COLLECTION = 'test_index'
+COLLECTION = 'casa_gfed_3hrly'
+INDEX_COLLECTION = 'coord_index'
 PATH = '/gis_lab/project/NASA_ACOS_Visualization/Data/from_Vineet/data_casa_gfed_3hrly.mat'
 SCN_PATH = '/usr/local/dev/data/casa_gfed_inversion_results'
 #PATH = '/usr/local/dev/fluxvis/_data_/data_casa_gfed_3hrly.mat'
@@ -28,6 +28,9 @@ def insert_bulk(path, var_name='casa_gfed_2004', col_num=None, dt=None, precisio
 
     dfm = mat_to_dataframe(path, var_name, col_num, dt)
 
+    #Drop the old collection. It will be recreated when inserting.
+    r = client[DB].drop_collection(COLLECTION)
+
     if client[DB]['summary_stats'].find_one({'about_collection': COLLECTION}) is None:
         # Create summary statistics
         summary = stats(path)
@@ -36,8 +39,8 @@ def insert_bulk(path, var_name='casa_gfed_2004', col_num=None, dt=None, precisio
 
         # summary['tags'] = ['casa', 'gfed', 'surface', 'flux', '3hourly']
         summary['about_collection'] = COLLECTION
-        summary['timestamp_start'] = datetime.datetime.strptime(dfm.columns.values[0], '%Y-%m-%d %H:%M:%S')
-        summary['timestamp_end'] = datetime.datetime.strptime(dfm.columns.values[intervals - 1], '%Y-%m-%d %H:%M:%S')
+        summary['timestamp_start'] = datetime.datetime.strptime(dfm.columns.values[0], '%Y-%m-%dT%H:%M:%S')
+        summary['timestamp_end'] = datetime.datetime.strptime(dfm.columns.values[intervals - 1], '%Y-%m-%dT%H:%M:%S')
 
         # Insert summary statistics
         i = client[DB]['summary_stats'].insert(summary)
@@ -55,6 +58,8 @@ def insert_bulk(path, var_name='casa_gfed_2004', col_num=None, dt=None, precisio
             j = client[DB][INDEX_COLLECTION].insert({'i':[kv[0] for kv in series.iterkv()]})
 
         i += 1
+        update_progress(dfm.shape[1],i,"CASA-GFED Flux",False)
+    update_progress(dfm.shape[1],i,"CASA-GFED Flux",True)
 
 
 def insert_covariance(scn, scn_path, col_num=None, dt=None, precision=5):
@@ -94,7 +99,7 @@ def insert_covariance(scn, scn_path, col_num=None, dt=None, precision=5):
         # collection name? scn_uncert? scenario number vs scenario name?
         res = client[DB][scn].insert({'_id':'ann.'+`i`, 'v':cov_limited})
         i+=1
-        update_progress(len(data), i, 'Ann_Uncert')
+        update_progress(len(data), i, 'Ann_Uncert', False)
 
     #Insert into mongo
     #res = client[DB][scn].insert(ann)
@@ -114,15 +119,20 @@ def insert_covariance(scn, scn_path, col_num=None, dt=None, precision=5):
                 cov_limited.append(to_fixed(val))
             res = client[DB][scn].insert({'_id':`m`+'.'+`i`, 'v':cov_limited})
             i+=1
-            update_progress(len(data), i, 'Month_Uncert'+`m`)
+            update_progress(len(data), i, 'Month_Uncert'+`m`,False)
+    update_progress(len(data), i, 'Month_Uncert'+`m`,True)
         
 
-def update_progress(tot, cur, title):
-    progress = (cur/tot) * 100
-    #sys.stdout.write('\r%.1f%%' % (progress))
-    upd = '\r'+title+' progress '+'[{0:20}] {1:.1f}%'.format('#' * int((progress)/5), progress)
-    sys.stdout.write(upd)
-    sys.stdout.flush()
+def update_progress(tot, cur, title, clear=False):
+    if (clear == False):
+        progress = (cur/tot) * 100
+        #sys.stdout.write('\r%.1f%%' % (progress))
+        upd = '\r'+title+' progress '+'[{0:20}] {1:.1f}%'.format('#' * int((progress)/5), progress)
+        sys.stdout.write(upd)
+        sys.stdout.flush()
+    else: 
+        sys.stdout.write('\n')
+        sys.stdout.flush()
 
 
 def stats(path, var_name='casa_gfed_2004'):
