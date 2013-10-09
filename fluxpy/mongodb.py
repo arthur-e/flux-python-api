@@ -16,7 +16,6 @@ COLLECTION = 'casa_gfed_3hrly'
 INDEX_COLLECTION = 'coord_index'
 PATH = '/gis_lab/project/NASA_ACOS_Visualization/Data/from_Vineet/data_casa_gfed_3hrly.mat'
 SCN_PATH = '/usr/local/dev/data/casa_gfed_inversion_results'
-#PATH = '/usr/local/dev/fluxvis/_data_/data_casa_gfed_3hrly.mat'
 
 def insert_bulk(path, var_name='casa_gfed_2004', col_num=None, dt=None, precision=2):
     '''
@@ -28,7 +27,7 @@ def insert_bulk(path, var_name='casa_gfed_2004', col_num=None, dt=None, precisio
 
     dfm = mat_to_dataframe(path, var_name, col_num, dt)
 
-    #Drop the old collection. It will be recreated when inserting.
+    # Drop the old collection. It will be recreated when inserting.
     r = client[DB].drop_collection(COLLECTION)
 
     if client[DB]['summary_stats'].find_one({'about_collection': COLLECTION}) is None:
@@ -53,7 +52,7 @@ def insert_bulk(path, var_name='casa_gfed_2004', col_num=None, dt=None, precisio
             '_id': datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S'),
             'values': [ round(kv[1], precision) for kv in series.iterkv()]
         })
-        #Insert the cell coord index once only
+        # Insert the cell coord index once only
         if i == 1:
             j = client[DB][INDEX_COLLECTION].insert({'i':[kv[0] for kv in series.iterkv()]})
 
@@ -71,7 +70,7 @@ def insert_covariance(scn, scn_path, col_num=None, dt=None, precision=5):
 
     # Each scenario has one annual uncertainty file and twelve monthly uncertainty files
     #   so we need to fetch all of them. 
-    p = '/'.join([scn_path,scn])
+    p = '/'.join([scn_path, scn])
     
     # Split the scenario id and the scenario name. Might want to use the scenario id later.
     sid,scn = scn.split('.')
@@ -193,6 +192,5 @@ if __name__ == '__main__':
 
     elif args.action == 'flux':
         insert_bulk(PATH)
-        #insert_bulk(sys.argv[1], sys.argv[2], gzip=sys.argv[3])
 
     

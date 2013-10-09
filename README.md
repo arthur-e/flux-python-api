@@ -61,3 +61,5 @@ Tools are avaialble for performing a bulk insert into MongoDB; here we assume a 
 
     # The starting date and time need to be provided as a datetime.datetime instance
     insert_bulk('/path/to/file.mat', variable_name, dt=datetime.datetime(2004, 1, 1))
+
+
