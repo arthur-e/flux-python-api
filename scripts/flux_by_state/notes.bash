@@ -2,14 +2,14 @@
 wget http://www.naturalearthdata.com/http//www.naturalearthdata.com/download/50m/cultural/ne_50m_admin_1_states_provinces_lakes.zip
 unzip ne_50m_admin_1_states_provinces_lakes.zip
 
-# Extract just American states, except Hawaii and D.C. which won't have model cells intesecting their geometry
+# Extract just American states
 ogr2ogr -f "ESRI Shapefile" -where "sr_adm0_a3 IN ('USA')" us_states.shp ne_50m_admin_1_states_provinces_lakes.shp
 
 # Remove the old stuff
 rm ne_50m_admin_1_states_provinces_lakes.*
 
-# Convert to GeoJSON
-ogr2ogr -f "GeoJSON" -where "postal NOT IN ('HI','DC')" us_states.json us_states.shp
+# Convert to GeoJSON, except Hawaii and D.C. which won't have model cells intesecting their geometry and Alaska, which is too far outside the projection
+ogr2ogr -f "GeoJSON" -where "postal NOT IN ('AK', 'HI','DC')" us_states.json us_states.shp
 
 # Simplify to 10^-6 (0.000001) steradians, which is acceptable for this display
 # See: http://en.wikipedia.org/wiki/Steradian#SI_multiples

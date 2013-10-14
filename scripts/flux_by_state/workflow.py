@@ -1,7 +1,7 @@
 '''
 Functions from the workflow for reproducing the carbon flux by U.S. State dataset.
 '''
-import datetime, json, csv, ipdb
+import sys, datetime, json, csv
 from shapely import wkt
 from shapely.geometry import shape
 from pymongo import MongoClient
@@ -83,8 +83,20 @@ def hourly_flux_by_state(start='2003-12-22T03:00:00', end='2004-12-22T03:00:00',
         fluxes_by_state[state] = fluxes_in_time
         cursor.rewind()
 
-    return fluxes_by_state        
+    return fluxes_by_state
 
 
 if __name__ == '__main__':
-    get_state_cells()
+    mapping = hourly_flux_by_state()
+    header = ['id']
+    header.extend(['t%d' % i for i in range(len(mapping['MI']))])
+
+    with open(sys.argv[1], 'wb') as stream:
+        writer = csv.writer(stream)
+        writer.writerow(header)
+        for key, value in mapping.items():
+            row = [key]
+            row.extend(value)
+            writer.writerow(row)
+
+
