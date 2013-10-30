@@ -13,7 +13,7 @@ ogr2ogr -f "GeoJSON" -where "postal NOT IN ('AK', 'HI','DC')" us_states.json us_
 
 # Simplify to 10^-6 (0.000001) steradians, which is acceptable for this display
 # See: http://en.wikipedia.org/wiki/Steradian#SI_multiples
-topojson --id-property su_a3 -s 0.000001 -p name=NAME -o us_states.topo.json us_states.json
+topojson --id-property postal -s 0.000001 -o us_states.topo.json us_states.json
 
 # Make a GeoJSON copy with reduced precision
 geojson --precision 3 us_states.topo.json
