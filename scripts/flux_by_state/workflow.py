@@ -2,6 +2,8 @@
 Functions from the workflow for reproducing the carbon flux by U.S. State dataset.
 '''
 import sys, datetime, json, csv
+import pandas as pd
+import numpy as np
 from shapely import wkt
 from shapely.geometry import shape
 from pymongo import MongoClient
@@ -162,8 +164,92 @@ def hourly_flux_by_state(start='2003-12-22T03:00:00', end='2004-12-22T03:00:00',
     return fluxes_by_state
 
 
+def daily_flux_by_state(start='2003-12-22T03:00:00', end='2004-12-22T03:00:00', aggr='net'):
+    '''
+    Calculates the net (or something else) daily flux per U.S. State. The
+    flux estimates are normalized by the area. Net, total positive, and total
+    negative flux estimates are "flux per unit area" while mean flux estimates
+    area "mean flux per unit area."
+    '''
+    states = get_state_cells()
+    fluxes_by_state = dict.fromkeys(states, [])
+    start_time = datetime.datetime.strptime(start, '%Y-%m-%dT%H:%M:%S')
+
+    cursor = client[DB][COLLECTION].find({
+        '_id': {
+            '$gte': start_time,
+            '$lte': datetime.datetime.strptime(end, '%Y-%m-%dT%H:%M:%S')
+        }
+    }).sort([('_id', 1)])
+
+    # Create an index of 3-hour intervals
+    date_index = pd.date_range(start_time.strftime('%Y%m%d%H%M%S'),
+        periods=cursor.count(), freq='3H', tz='UTC')
+
+    # This is the aggregator in time; functions that are array-valued
+    if aggr in ('mean', 'median', 'min', 'max'):
+        aggregator = aggr
+
+    elif aggr == 'net':
+        aggregator = sum
+
+    elif aggr == 'positive':
+        aggregator = lambda x: sum(map(lambda y: y if y > 0 else 0, x))
+
+    elif aggr == 'negative':
+        aggregator = lambda x: sum(map(lambda y: y if y < 0 else 0, x))
+
+    # Iterate through the states and their intersected model cells
+    for state, indices in states.items():
+        area = STATE_AREAS[state] / (1000.0 * 1000.0) # Convert sq. kilometers to sq. megameters
+        fluxes_in_time = []
+
+        for window in cursor:
+            # Get those fluxes which are indicated by their cell indices
+            fluxes = [window['values'][i] for i in indices]
+
+            # This is the aggregator in space; functions that are number-valued
+            if aggr == 'net' or aggr == 'mean':
+                flux = reduce(lambda x, y: x + y, fluxes) / area
+
+                if aggr == 'mean':
+                    flux = flux / len(fluxes)
+
+            elif aggr == 'median':
+                flux = fluxes.sort()[math.floor(len(fluxes) / 2)]
+
+            elif aggr == 'positive':
+                flux = reduce(lambda x, y: x + y if x > 0 else 0, fluxes) / area
+
+            elif aggr == 'negative':
+                flux = reduce(lambda x, y: x + y if x < 0 else 0, fluxes) / area
+
+            elif aggr == 'max':
+                flux = max(fluxes)
+
+            elif aggr == 'min':
+                flux = min(fluxes)
+
+            fluxes_in_time.append(round(flux, FLUX_PRECISION))
+
+        # Create a time series of just these spatially-aggregated fluxes
+        series = pd.Series(fluxes_in_time, index=date_index)
+
+        # Resample the time series to the day ('D')                
+        fluxes_by_state[state] = series.resample('D',
+            how=aggregator).round(FLUX_PRECISION).tolist()
+
+        cursor.rewind()
+
+    return fluxes_by_state
+
+
 if __name__ == '__main__':
-    mapping = hourly_flux_by_state()
+    aggr = 'net'
+    if len(sys.argv) > 2:
+        aggr = sys.argv[2]
+
+    mapping = daily_flux_by_state(aggr=aggr)
     header = ['id']
     header.extend(['t%d' % i for i in range(len(mapping['MI']))])
 
