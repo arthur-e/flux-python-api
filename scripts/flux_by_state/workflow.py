@@ -164,7 +164,7 @@ def hourly_flux_by_state(start='2003-12-22T03:00:00', end='2004-12-22T03:00:00',
     return fluxes_by_state
 
 
-def daily_flux_by_state(start='2003-12-22T03:00:00', end='2004-12-22T03:00:00', aggr='net'):
+def flux_by_state(start='2003-12-22T03:00:00', end='2004-12-22T03:00:00', aggr='net', interval='D'):
     '''
     Calculates the net (or something else) daily flux per U.S. State. The
     flux estimates are normalized by the area. Net, total positive, and total
@@ -185,6 +185,10 @@ def daily_flux_by_state(start='2003-12-22T03:00:00', end='2004-12-22T03:00:00', 
     # Create an index of 3-hour intervals
     date_index = pd.date_range(start_time.strftime('%Y%m%d%H%M%S'),
         periods=cursor.count(), freq='3H', tz='UTC')
+
+    # Guard against, say, net monthly aggregation when some months only have partial coverage
+    if aggr not in ('mean', 'median', 'min', 'max'):
+        assert interval not in ('M',), 'Net or total aggregation over the specified time scale, which has only partial coverage at some time steps, is not recommended'
 
     # This is the aggregator in time; functions that are array-valued
     if aggr in ('mean', 'median', 'min', 'max'):
@@ -235,8 +239,8 @@ def daily_flux_by_state(start='2003-12-22T03:00:00', end='2004-12-22T03:00:00', 
         # Create a time series of just these spatially-aggregated fluxes
         series = pd.Series(fluxes_in_time, index=date_index)
 
-        # Resample the time series to the day ('D')                
-        fluxes_by_state[state] = series.resample('D',
+        # Resample the time series, by default to the day (interval='D')
+        fluxes_by_state[state] = series.resample(interval,
             how=aggregator).round(FLUX_PRECISION).tolist()
 
         cursor.rewind()
@@ -246,10 +250,19 @@ def daily_flux_by_state(start='2003-12-22T03:00:00', end='2004-12-22T03:00:00', 
 
 if __name__ == '__main__':
     aggr = 'net'
+    interval = 'M'
     if len(sys.argv) > 2:
         aggr = sys.argv[2]
 
-    mapping = daily_flux_by_state(aggr=aggr)
+    if len(sys.argv) > 3:
+        interval = sys.argv[3]
+
+    mapping = flux_by_state(**{
+        'aggr': aggr,
+        'interval': interval,
+        'start': '2004-01-01T00:00:00'
+    })
+
     header = ['id']
     header.extend(['t%d' % i for i in range(len(mapping['MI']))])
 
