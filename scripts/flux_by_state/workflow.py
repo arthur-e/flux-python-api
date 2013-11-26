@@ -67,103 +67,6 @@ STATE_AREAS = { # Square kilometers of land area
     'WY': 251489,
 }
 
-def get_state_areas(path=STATES_GEOMETRY):
-    '''
-    Calculates the area (in arbitrary units) of each U.S. State.
-    '''
-    state_assoc = {}
-
-    with open(path, 'rb') as stream:
-        states = json.loads(stream.read())
-
-    for state in states['features']:
-        # Get the MultiPolygon geometry for the state
-        geom = shape(state['geometry'])
-
-        state_assoc[state['properties']['postal']] = geom.area
-
-    return state_assoc
-
-
-def get_state_cells(path=STATES_GEOMETRY):
-    '''
-    Returns an associative array (dictionary) of U.S. State : Model cells mappings;
-    a list of the cells, by their indices, that intersect each state's geometry.
-    '''
-    # This associative array will associate states with the many model cells
-    #   their geometry intersects
-    state_assoc = {}
-
-    # Create a number of Point objects
-    cells = client[DB][INDEX_COLLECTION].find_one()['i']
-    cells = [wkt.loads('POINT(%s %s)' % (c[0], c[1])) for c in cells]
-
-    with open(path, 'rb') as stream:
-        states = json.loads(stream.read())
-
-    for state in states['features']:
-        # Create a new list to hold features
-        state_assoc.setdefault(state['properties']['postal'], [])
-
-        # Get the MultiPolygon geometry for the state
-        geom = shape(state['geometry'])
-
-        i = 0
-        while i < len(cells):
-            if geom.intersects(cells[i]):
-                state_assoc[state['properties']['postal']].append(i)
-
-            i += 1
-
-    return state_assoc
-
-
-def hourly_flux_by_state(start='2003-12-22T03:00:00', end='2004-12-22T03:00:00', aggr='net'):
-    '''
-    Calculates the net (or something else) 3-hourly flux per U.S. State. The
-    flux estimates are normalized by the area. Net, total positive, and total
-    negative flux estimates are "flux per unit area" while mean flux estimates
-    area "mean flux per unit area."
-    '''
-    states = get_state_cells()
-    fluxes_by_state = dict.fromkeys(states, [])
-
-    cursor = client[DB][COLLECTION].find({
-        '$and': [
-            {'_id': {'$gte': datetime.datetime.strptime(start, '%Y-%m-%dT%H:%M:%S')}},
-            {'_id': {'$lte': datetime.datetime.strptime(end, '%Y-%m-%dT%H:%M:%S')}},
-        ]
-    })
-
-    # Iterate through the states and their intersected model cells
-    for state, indices in states.items():
-        area = STATE_AREAS[state] / (1000.0 * 1000.0) # Convert sq. kilometers to sq. megameters
-        fluxes_in_time = []
-
-        for window in cursor:
-            # Get those fluxes which are indicated by their cell indices
-            fluxes = [window['values'][i] for i in indices]
-
-            if aggr == 'net' or aggr == 'mean':
-                flux = reduce(lambda x, y: x + y, fluxes) / area
-
-                if aggr == 'mean':
-                    flux = flux / len(fluxes)
-
-            elif aggr == 'positive':
-                flux = reduce(lambda x, y: x + y if x > 0 else 0, fluxes) / area
-
-            elif aggr == 'negative':
-                flux = reduce(lambda x, y: x + y if x < 0 else 0, fluxes) / area
-
-            fluxes_in_time.append(round(flux, FLUX_PRECISION))
-
-        fluxes_by_state[state] = fluxes_in_time
-        cursor.rewind()
-
-    return fluxes_by_state
-
-
 def flux_by_state(start='2003-12-22T03:00:00', end='2004-12-22T03:00:00', aggr='net', interval='D'):
     '''
     Calculates the net (or something else) daily flux per U.S. State. The
@@ -248,8 +151,106 @@ def flux_by_state(start='2003-12-22T03:00:00', end='2004-12-22T03:00:00', aggr='
     return fluxes_by_state
 
 
+def get_cell_geometry_as_geojson(multi=True):
+    '''
+    Create a GeoJSON layer from the model cells.
+    '''
+    cells = client[DB][INDEX_COLLECTION].find_one()['i']
+    #assoc = get_state_cells()
+
+    if multi:
+        template = {
+            'coordinates': cells,
+            'type': 'MultiPoint'
+        }
+
+    else:
+        template = {
+            'geometries': [],
+            'type': 'GeometryCollection'
+        }
+
+        for cell in cells:
+            template['geometries'].append({
+                'type': 'Point',
+                'coordinates': cell
+            })
+
+
+    return json.dumps(template)
+
+
+def get_state_areas(path=STATES_GEOMETRY):
+    '''
+    Calculates the area (in arbitrary units) of each U.S. State.
+    '''
+    state_assoc = {}
+
+    with open(path, 'rb') as stream:
+        states = json.loads(stream.read())
+
+    for state in states['features']:
+        # Get the MultiPolygon geometry for the state
+        geom = shape(state['geometry'])
+
+        state_assoc[state['properties']['postal']] = geom.area
+
+    return state_assoc
+
+
+def get_state_cells(path=STATES_GEOMETRY):
+    '''
+    Returns an associative array (dictionary) of U.S. State : Model cells mappings;
+    a list of the cells, by their indices, that intersect each state's geometry.
+    '''
+    # This associative array will associate states with the many model cells
+    #   their geometry intersects
+    state_assoc = {}
+
+    # Create a number of Point objects
+    cells = client[DB][INDEX_COLLECTION].find_one()['i']
+    cells = [wkt.loads('POINT(%s %s)' % (c[0], c[1])) for c in cells]
+
+    with open(path, 'rb') as stream:
+        states = json.loads(stream.read())
+
+    for state in states['features']:
+        # Create a new list to hold features
+        state_assoc.setdefault(state['properties']['postal'], [])
+
+        # Get the MultiPolygon geometry for the state
+        geom = shape(state['geometry'])
+
+        i = 0
+        while i < len(cells):
+            if geom.intersects(cells[i]):
+                state_assoc[state['properties']['postal']].append(i)
+
+            i += 1
+
+    return state_assoc
+    
+
+def view_sample_magnitudes():
+    '''
+    Generates a view of the data for the analyst to verify that there is no
+    dependence on the number of model cells.
+    '''
+    mapping = flux_by_state(**{
+        'aggr': aggr,
+        'interval': interval,
+        'start': '2004-01-01T00:00:00'
+    })
+    
+    cells = get_state_cells()
+    
+    y, x = zip(*[(len(cells[m]), np.array(mapping[m]).mean()) for m in mapping.keys()])
+    
+    scatter(y, x)
+
+
 if __name__ == '__main__':
-    aggr = 'net'
+    aggr = 'mean'
     interval = 'M'
     if len(sys.argv) > 2:
         aggr = sys.argv[2]
