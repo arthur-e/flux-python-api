@@ -13,32 +13,34 @@ def bulk_hdf5_to_csv(path, var_name=None, regex='^Month_Uncert[\.\w\-\d_]+.mat')
     '''
     Generates many CSV files from a directory of HDF5 files.
     '''
-    regex = re.compile(regex)
+    if regex is not None:
+        regex = re.compile(regex)
+        
     ls = os.listdir(path)
 
     for filename in ls:
-        if regex.match(filename) is None:
-            continue # Skip this file
+        if regex is not None:
+            if regex.match(filename) is None:
+                continue # Skip this file
             
         if var_name is None:
             # Defaults to the filename without any numeric characters
             var_name = filename.split('.')[0].strip('0123456789')
-
+            
         # e.g. '/ws4/idata/fluxvis/casa_gfed_inversion_results/1.zerofull_casa_1pm_10twr/Month_Uncert1.mat'
         try:
             f = h5py.File(os.path.join(path, filename))
             
         except IOError:
-            sys.stderr.write('IOError encountered for %s' % path)
+            sys.stderr.write('IOError encountered for %s\n' % path)
             continue
             
         # With pandas, make a DataFrame from the NumPy array
         df = pd.DataFrame(f.get(var_name)[:])
-
-        df.to_csv(filename.rstrip('.mat') + '.csv')
+        df.to_csv(os.path.join(path, filename.split('.')[0] + '.csv'))
         
 
-def hdf5_to_dataframe(path, var_name, limit=None, dt=None):
+def hdf5_to_dataframe(path, var_name=None, limit=None, dt=None):
     '''
     Creates a DataFrame from an HDF5 file of CASA GFED surface fluxes. Will
     return a subset of the data frame, if desired, to <limit> number of columns.
@@ -46,6 +48,10 @@ def hdf5_to_dataframe(path, var_name, limit=None, dt=None):
     respectively.
     '''
     f = h5py.File(path)
+    
+    if var_name is None:
+        # Defaults to the filename without any numeric characters
+        var_name = path.split('.')[0].strip('0123456789')
 
     if dt is None:
         dt = datetime.datetime(2003, 12, 22, 3, 0, 0) # 2003-12-22 at 3 AM
