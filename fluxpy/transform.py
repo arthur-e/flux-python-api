@@ -1,30 +1,42 @@
-import datetime
+'''
+Contains those functions necessary for extracting data from Matlab/HDF5 files
+as Python pandas Data Frames.
+'''
 from dateutil.relativedelta import *
-import json, csv, pprint
+import datetime, os, sys, re, json, csv, pprint
 import pandas as pd
 import numpy as np
 import scipy.io
 import h5py
 
-def bulk_hdf5_to_csv(dir_path, regex='^Month_Uncert[\.\w\-\d_]+.mat'):
+def bulk_hdf5_to_csv(path, var_name=None, regex='^Month_Uncert[\.\w\-\d_]+.mat'):
     '''
     Generates many CSV files from a directory of HDF5 files.
     '''
     regex = re.compile(regex)
-    ls = os.listdir(dir_path)
+    ls = os.listdir(path)
 
     for filename in ls:
         if regex.match(filename) is None:
             continue # Skip this file
+            
+        if var_name is None:
+            # Defaults to the filename without any numeric characters
+            var_name = filename.split('.')[0].strip('0123456789')
 
         # e.g. '/ws4/idata/fluxvis/casa_gfed_inversion_results/1.zerofull_casa_1pm_10twr/Month_Uncert1.mat'
-        f = h5py.File(path)
-
+        try:
+            f = h5py.File(os.path.join(path, filename))
+            
+        except IOError:
+            sys.stderr.write('IOError encountered for %s' % path)
+            continue
+            
         # With pandas, make a DataFrame from the NumPy array
         df = pd.DataFrame(f.get(var_name)[:])
 
-        df.to_csv('1.zerofull_casa_1pm_10twr_' + filename.rstrip('.mat') + '.csv')
-
+        df.to_csv(filename.rstrip('.mat') + '.csv')
+        
 
 def hdf5_to_dataframe(path, var_name, limit=None, dt=None):
     '''
