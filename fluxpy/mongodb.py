@@ -17,7 +17,7 @@ client = MongoClient() # Defaults: MongoClient('localhost', 27017)
 DB = 'fluxvis'
 COLLECTION = 'casa_gfed_3hrly'
 INDEX_COLLECTION = 'coord_index'
-DATA_PATH = '/ws4/idata/fluxvis/casa_gfed_inversion_results/'
+DEFAULT_PATH = '/ws4/idata/fluxvis/casa_gfed_inversion_results/'
 
 def insert_bulk(path, scn=COLLECTION, var_name='casa_gfed_2004', col_num=None, dt=None, precision=2):
     '''
@@ -224,7 +224,7 @@ if __name__ == '__main__':
             p.error('--scenario must be set when action=uncertainty')
             
         if args.path == None:
-            insert_covariance(args.scenario, DATA_PATH)
+            insert_covariance(args.scenario, DEFAULT_PATH)
             
         else:
             insert_covariance(args.scenario, args.path)

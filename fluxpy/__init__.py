@@ -24,3 +24,9 @@ sys.path[:0] = new_sys_path
 
 # End setup
 ############
+
+DB = 'fluxvis'
+COLLECTION = 'casa_gfed_3hrly'
+INDEX_COLLECTION = 'coord_index'
+DEFAULT_PATH = '/ws4/idata/fluxvis/casa_gfed_inversion_results/'
+
