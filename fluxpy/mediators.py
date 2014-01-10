@@ -22,6 +22,23 @@ class TransformationInterface:
     argument which is the interchange datum (a dictionary). A configuration
     file may be provided as a *.json file with the same name as the data file.
     '''
+    defaults = {
+        'var_name': None, # The Matlab/HDF5 variable of interst
+        'interval': None, # The time interval (ms) between observations (documents)
+        'range': None, # The amount of time (ms) for which the measurements are valid after the timestamp
+        'columns': None, # The column order
+        'header': None, # The human-readable column headers, in order
+        'units': None, # The units of measurement, in order
+        'fields': { # Lambda functions, operating on Series or sequences, for accessing fields
+            'x': None,
+            'y': None,
+            't': None,
+            'ident': None,
+            'value': None,
+            'error': None
+        }
+    }
+
     def __init__(self, path):
         # Check to see if a params file with the same name exists
         params = os.path.join('.'.join(path.split('.')[:-1]), '.json')
@@ -72,25 +89,29 @@ class Mediator:
         pass
 
 
-class 4DGridMediator(Mediator):
+class 3DGridMediator(Mediator):
     '''
-    Mediator that understands single-valued, spatio-temporal (4D) data on
-    a structure, latitude-longitude grid.
+    Mediator that understands single-valued, spatial data on a structured,
+    latitude-longitude grid; two spatial dimensions, one value dimension (3D).
     '''
 
-    def __precision__(self, value):
-        return round(value, 2)
-
-    def save_to_db(self, collection_name):
-        super(4DGridMediator, self).save_to_db(collection_name)
+    def save_to_db(self, collection_name, timestamp, **kwargs):
+        super(3DGridMediator, self).save_to_db(collection_name)
 
         # Drop the old collection; it will be recreated when inserting.
         r = self.client[self.db_name].drop_collection(collection_name)
 
         for inst in self.instances:
-            df = inst.save()
-            #TODO Resulting dataframe
-            pass
+            df = inst.save(**kwargs)
+            
+            # Empty data dictionary
+            data_dict = {
+                '_id': datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+            }
+            
+            #TODO Must create a GeoJSON document
+
+            j = client[self.db_name][collection_name].insert(data_dict)
 
         #TODO After instances are saved, call self.update_summary_stats()
 
@@ -105,16 +126,16 @@ class XCO2Matrix(TransformationInterface):
     '''
     defaults = {
         'var_name': 'XCO2',
-        'timestamp': None,
         'interval': 86400000, # 1 day (daily) in ms
-        'columns': ('lng', 'lat', 'value', None, None, 'error'),
+        'columns': ('x', 'y', 'value', None, None, 'error'),
         'header': ('lng', 'lat', 'xco2_ppm', 'day', 'year', 'error_ppm'),
         'units': ('degrees', 'degrees', 'ppm', None, None, 'ppm^2'),
         'fields': {
-            'lng': lambda s: s[0],
-            'lat': lambda s: s[1],
+            'x': lambda s: s[0],
+            'y': lambda s: s[1],
+            't': lambda s: datetime.datetime(int(s[4]), 1, 1) + datetime.timedelta(days=s[3]),
+            'ident': lambda s: None,
             'value': lambda s: s[2],
-            'timestamp': lambda s: datetime.datetime(int(s[4]), 1, 1) + datetime.timedelta(days=s[3]),
             'error': lambda s: s[5]
         }
     }
@@ -137,7 +158,10 @@ class XCO2Matrix(TransformationInterface):
             self.params = json.load(open(params, 'rb'))
 
         else:
-            self.params = self.defaults
+            self.params = {}
+        
+        for (key, value) in self.defaults.items():    
+            self.params.setdefault(key, value)
 
         # Overrides in this instance
         self.params['timestamp'] = timestamp
@@ -161,19 +185,15 @@ class KrigedXCO2Matrix(XCO2Matrix):
     '''
     defaults = {
         'var_name': 'krigedData',
-        'timestamp': None,
         'interval': None,
-        'columns': ('lng', 'lat', 'value', 'error'),
-        'header': ('lng', 'lat', 'xco2_ppm', 'error_ppm^2'),
-        'units': ('degrees', 'degrees', 'ppm', 'ppm^2'),
-        'fields': {
-            'lng': lambda s: s[0],
-            'lat': lambda s: s[1],
-            'value': lambda s: s[2],
-            'timestamp': lambda s: None,
-            'error': lambda s: s[3]
-        }
+        'range': 518400000, # 6 days
+        'columns': ('y', 'x', 'value', 'error', '', '', '', '', ''),
+        'header': ('lat', 'lng', 'xco2_ppm', 'error_ppm^2', '', '', '', '', ''),
+        'units': ('degrees', 'degrees', 'ppm', 'ppm^2')
     }
+    
+    def __precision__(self, value):
+        return round(value, 2)
         
     def dump(self, data):
         # Restores the file from the interchange format (dictionary)
@@ -191,7 +211,10 @@ class KrigedXCO2Matrix(XCO2Matrix):
         f = self.file_handler(self.filename)
         
         # Data frame
-        df = pd.DataFrame(f.get(var_name)[:], cols=self.params['columns'])
+        df = pd.DataFrame(f.get(var_name)[:], columns=self.params['columns'])
+        
+        # Fix the precision of data values
+        df['value'] = df['value'].apply(self.__precision__)
         
         return df
 
