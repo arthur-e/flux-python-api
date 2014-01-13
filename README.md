@@ -2,14 +2,32 @@
 # Installation and Setup #
 ##########################
 
-    cat > /usr/local/pythonenv/fluxvis-env/lib/python2.7/site-packages/fluxpy.pth
-    # Write in: /usr/local/project/flux-python-api/
+    echo "/usr/local/project/flux-python-api/" > /usr/local/pythonenv/fluxvis-env/lib/python2.7/site-packages/fluxpy.pth
+
+###############################################
+# Loading Data To/From MongoDB with Mediators #
+###############################################
+
+Given the examples of gridded (kriged) and not-gridded XCO2 data, here is the
+process for loading these data into the MongoDB database.
+
+    from fluxpy.mediators import XCO2Matrix, Grid3DMediator
+    
+    # The mediator understands how 3D gridded data should be stored
+    mediator = Grid3DMediator()
+    
+    # Create an instance of the XCO2Matrix data model; parameters are loaded
+    #   from a parameter file with the same name (e.g. xco2_data.json) if it
+    #   exsists but otherwise are set as optional keyword arguments
+    xco2 = KrigedXCO2Matrix('xco2_data.mat', timestamp='2009-06-15')
+    
+    # Add the instance to our mediator and save it to the database using
+    #   the collection name provided
+    mediator.add(xco2).save_to_db('my_xco2_data')
 
 ####################################
 # Working with CASA-GFED Flux Data #
 ####################################
-
-The `casagfed2mongo` module contains a number of functions for working with CASA-GFED modeled surface fluxes.
 
 ## Importing from Matlab/HDF5 Files
 

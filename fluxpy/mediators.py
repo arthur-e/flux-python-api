@@ -2,6 +2,7 @@
 e.g. /ws4/idata/fluxvis/casa_gfed_inversion_results/1.zerofull_casa_1pm_10twr/Month_Uncert1.mat
 '''
 
+import ipdb#FIXME
 import datetime, os, sys, re, json, csv
 import pandas as pd
 import numpy as np
@@ -9,9 +10,7 @@ import scipy.io
 import h5py
 from dateutil.relativedelta import *
 from pymongo import MongoClient
-from fluxpy import DB, COLLECTION, INDEX_COLLECTION, DEFAULT_PATH, RESERVED_COLLECTION_NAMES
-
-client = MongoClient() # Defaults: MongoClient('localhost', 27017)
+from fluxpy import DB, DEFAULT_PATH, RESERVED_COLLECTION_NAMES
 
 class TransformationInterface:
     '''
@@ -48,20 +47,20 @@ class TransformationInterface:
         else:
             self.params = self.defaults
 
-    def config(self, key, value=None):
-        if value is not None:
-            self.params[key] = value
-        
-        return self.params[key]
+    def __error_precision__(self, value):
+        return round(value, 4)
+
+    def __precision__(self, value):
+        return round(value, 2)
 
     def dump(self, data):
-        pass #TODO Allow for formats to be specified?
-    
-    def save(self):
+        pass
+
+    def save(self, *args, **kwargs):
         pass
 
 
-class Mediator:
+class Mediator(object):
     '''
     A generic model for transforming data between foreign formats and the
     persistence layer of choice (MongoDB in this application). Mediator calls
@@ -69,17 +68,31 @@ class Mediator:
     classes that interpret foreign formats).
     '''
 
-    def __init__(self, client, db_name=DB):
-        self.client = client # The MongoDB client
+    def __init__(self, client=None, db_name=DB):
+        self.client = client or MongoClient() # The MongoDB client; defaults: MongoClient('localhost', 27017)
         self.db_name = db_name # The name of the MongoDB database
         self.instances = [] # Stored model instances
         
-    def add(self, inst):
-        self.instances.append(inst)
+    def add(self, *args, **kwargs):
+        '''Add model instances; set optional parameter overrides for all instances added'''
+        for each in args:
+            for key, value in kwargs.items():
+                each.params[key] = value
+                
+            self.instances.append(each)
+
         return self
         
     def load_from_db(self):
         pass
+        
+    def parse_timestamp(self, timestamp):
+        '''Parses an ISO 8601 timestamp'''
+        try:
+            return datetime.datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S')
+            
+        except ValueError:
+            return datetime.datetime.strptime(timestamp, '%Y-%m-%d')
         
     def save_to_db(self, collection_name):
         if collection_name in RESERVED_COLLECTION_NAMES:
@@ -89,29 +102,38 @@ class Mediator:
         pass
 
 
-class 3DGridMediator(Mediator):
+class Grid3DMediator(Mediator):
     '''
     Mediator that understands single-valued, spatial data on a structured,
     latitude-longitude grid; two spatial dimensions, one value dimension (3D).
+    Geometry expected as grid centroids (e.g. centroids of 1-degree grid cells).
     '''
 
-    def save_to_db(self, collection_name, timestamp, **kwargs):
-        super(3DGridMediator, self).save_to_db(collection_name)
-
+    def save_to_db(self, collection_name):
+        super(Grid3DMediator, self).save_to_db(collection_name)
+        
         # Drop the old collection; it will be recreated when inserting.
         r = self.client[self.db_name].drop_collection(collection_name)
 
         for inst in self.instances:
-            df = inst.save(**kwargs)
+            df = inst.save()
             
-            # Empty data dictionary
-            data_dict = {
-                '_id': datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
-            }
+            # Expect that a valid timestamp was provided
+            timestamp = inst.params['timestamp']
             
-            #TODO Must create a GeoJSON document
+            # Create the index of grid cell coordinates
+            i = self.client[self.db_name]['coord_index'].insert({
+                '_id': collection_name,
+                'i': [i for i in df.apply(lambda c: [c['x'], c['y']], 1)]
+            })
 
-            j = client[self.db_name][collection_name].insert(data_dict)
+            # Create the data document itself            
+            j = self.client[self.db_name][collection_name].insert({
+                '_id': self.parse_timestamp(timestamp),
+                '_range': int(inst.params['range']) or None,
+                'values': [v for v in df['value']],
+                'errors': [e for e in df['error']]
+            })
 
         #TODO After instances are saved, call self.update_summary_stats()
 
@@ -142,7 +164,7 @@ class XCO2Matrix(TransformationInterface):
 
     path_regex = re.compile(r'.+\.(?P<extension>mat|h5)')
 
-    def __init__(self, path, timestamp=None, var_name=None):
+    def __init__(self, path, **kwargs):
         if self.path_regex.match(path) is None:
             raise AttributeError('Only Matlab (*.mat) and HDF5 (*.h5 or *.mat) files are accepted')
 
@@ -151,21 +173,19 @@ class XCO2Matrix(TransformationInterface):
 
         else:
             self.file_handler = h5py.File
+            
+        self.params = {}
 
         # Check to see if a params file with the same name exists
         params = os.path.join('.'.join(path.split('.')[:-1]), '.json')
         if os.path.exists(params):
             self.params = json.load(open(params, 'rb'))
-
-        else:
-            self.params = {}
         
         for (key, value) in self.defaults.items():    
             self.params.setdefault(key, value)
 
         # Overrides in this instance
-        self.params['timestamp'] = timestamp
-        self.params['var_name'] = var_name
+        self.params.update(kwargs)
         
         self.filename = path
 
@@ -196,13 +216,13 @@ class KrigedXCO2Matrix(XCO2Matrix):
         return round(value, 2)
         
     def dump(self, data):
-        # Restores the file from the interchange format (dictionary)
+        # Restores the file from the interchange format
         pass
         
     def save(self, *args, **kwargs):
-        # Called by a Mediator class member; should return data in interchange (dictionary)
-        var_name = kwargs['var_name'] or self.params['var_name']
-        timestamp = kwargs['timestamp'] or self.params['timestamp']
+        # Called by a Mediator class member; should return data in interchange
+        var_name = kwargs.get('var_name') or self.params.get('var_name')
+        timestamp = kwargs.get('timestamp') or self.params.get('timestamp')
         
         if not all((var_name, timestamp)):
             raise AttributeError('One or more required configuration parameters were not provided')
@@ -215,6 +235,7 @@ class KrigedXCO2Matrix(XCO2Matrix):
         
         # Fix the precision of data values
         df['value'] = df['value'].apply(self.__precision__)
+        df['error'] = df['error'].apply(self.__error_precision__)
         
         return df
 
