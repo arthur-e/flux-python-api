@@ -31,24 +31,21 @@ class TransformationInterface:
             'isCollection': False,
             'type': 'Point' # The WKT type to make for each row
         },
-        'fields': { # Lambda functions, operating on Series or sequences, for accessing fields
-            'x': None,
-            'y': None,
-            't': None,
-            'ident': None,
-            'value': None,
-            'error': None
+        'resolution': { # Mutually exclusive with the "geometry" key
+            'x_length': 0.5, # Grid cell resolution in the x direction
+            'y_length': 0.5, # Grid cell resolution in the y direction
+            'units': 'degrees'
         }
     }
 
-    def __init__(self, path):
-        # Check to see if a params file with the same name exists
-        params = os.path.join('.'.join(path.split('.')[:-1]), '.json')
-        if os.path.exists(params):
-            self.params = json.load(open(params, 'rb'))
+    def __init__(self, path=None):
+        # Check to see if a config file with the same name exists
+        config = os.path.join('.'.join(path.split('.')[:-1]), '.json')
+        if os.path.exists(config):
+            self.config = json.load(open(config, 'rb'))
 
         else:
-            self.params = self.defaults
+            self.config = self.defaults
 
     def dump(self, data):
         pass
@@ -95,18 +92,18 @@ class XCO2Matrix(TransformationInterface):
         else:
             self.file_handler = h5py.File
             
-        self.params = {}
+        self.config = {}
 
-        # Check to see if a params file with the same name exists
-        params = os.path.join('.'.join(path.split('.')[:-1]), '.json')
-        if os.path.exists(params):
-            self.params = json.load(open(params, 'rb'))
+        # Check to see if a config file with the same name exists
+        config = os.path.join('.'.join(path.split('.')[:-1]), '.json')
+        if os.path.exists(config):
+            self.config = json.load(open(config, 'rb'))
         
         for (key, value) in self.defaults.items():    
-            self.params.setdefault(key, value)
+            self.config.setdefault(key, value)
 
         # Overrides in this instance
-        self.params.update(kwargs)
+        self.config.update(kwargs)
         
         # Remember the path to the file
         self.filename = path
@@ -118,10 +115,10 @@ class XCO2Matrix(TransformationInterface):
         '''Creates a DataFrame properly encapsulating the associated file data'''
 
         # Allow overrides through optional keyword arguments in save()
-        kwargs.setdefault('var_name', self.params.get('var_name'))
-        self.params.update(kwargs)
+        kwargs.setdefault('var_name', self.config.get('var_name'))
+        self.config.update(kwargs)
         
-        if self.params.get('var_name') is None:
+        if self.config.get('var_name') is None:
             raise AttributeError('One or more required configuration parameters were not provided')
         
         # HDF5/Matlab file interface
@@ -129,11 +126,11 @@ class XCO2Matrix(TransformationInterface):
         
         # Data frame
         try:
-            df = pd.DataFrame(f.get(self.params.get('var_name'))[:],
-                columns=self.params.get('columns'))
+            df = pd.DataFrame(f.get(self.config.get('var_name'))[:],
+                columns=self.config.get('columns'))
             
         except TypeError:
-            raise ValueError('Could not get at the variable named "%s"' % self.params.get('var_name'))
+            raise ValueError('Could not get at the variable named "%s"' % self.config.get('var_name'))
 
         # Add and populate a timestamp field
         t = []
@@ -146,8 +143,8 @@ class XCO2Matrix(TransformationInterface):
         # df = df.loc[:,['x', 'y', 't', 'value', 'error']]
 
         # Fix the precision of data values
-        for col in self.params.get('formats').keys():
-            df[col] = df[col].map(lambda x: float(self.params['formats'][col] % x))
+        for col in self.config.get('formats').keys():
+            df[col] = df[col].map(lambda x: float(self.config['formats'][col] % x))
         
         return df
 
@@ -171,18 +168,23 @@ class KrigedXCO2Matrix(XCO2Matrix):
             'error': '%.4f'
         },
         'header': ('lat', 'lng', 'xco2_ppm', 'error_ppm^2', '', '', '', '', ''),
-        'units': ('degrees', 'degrees', 'ppm', 'ppm^2', None, None, None, None, None)
+        'units': ('degrees', 'degrees', 'ppm', 'ppm^2', None, None, None, None, None),
+        'resolution': {
+            'x_length': 0.5,
+            'y_length': 0.5,
+            'units': 'degrees'
+        }
     }
     
     def save(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
 
         # Allow overrides through optional keyword arguments in save()
-        kwargs.setdefault('var_name', self.params.get('var_name'))
-        kwargs.setdefault('timestamp', self.params.get('timestamp'))
-        self.params.update(kwargs)
+        kwargs.setdefault('var_name', self.config.get('var_name'))
+        kwargs.setdefault('timestamp', self.config.get('timestamp'))
+        self.config.update(kwargs)
 
-        if not all((self.params.get('var_name'), self.params.get('timestamp'))):
+        if not all((self.config.get('var_name'), self.config.get('timestamp'))):
             raise AttributeError('One or more required configuration parameters were not provided')
 
         # HDF5/Matlab file interface
@@ -190,15 +192,15 @@ class KrigedXCO2Matrix(XCO2Matrix):
 
         # Data frame
         try:
-            df = pd.DataFrame(f.get(self.params.get('var_name'))[:],
-                columns=self.params.get('columns'))
+            df = pd.DataFrame(f.get(self.config.get('var_name'))[:],
+                columns=self.config.get('columns'))
 
         except TypeError:
-            raise ValueError('Could not get at the variable named "%s"' % self.params.get('var_name'))
+            raise ValueError('Could not get at the variable named "%s"' % self.config.get('var_name'))
             
         # Fix the precision of data values
-        for col in self.params.get('formats').keys():
-            df[col] = df[col].map(lambda x: float(self.params['formats'][col] % x))
+        for col in self.config.get('formats').keys():
+            df[col] = df[col].map(lambda x: float(self.config['formats'][col] % x))
 
         return df
 

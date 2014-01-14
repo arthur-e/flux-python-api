@@ -17,10 +17,10 @@ class TestXCO2Data(unittest.TestCase):
         xco2 = XCO2Matrix(os.path.join(self.path, 'xco2.mat'),
             timestamp='2009-06-15')
 
-        self.assertEqual(xco2.params.get('var_name'), 'XCO2')
-        self.assertEqual(xco2.params.get('interval'), 86400000)
-        self.assertEqual(xco2.params.get('range'), None)
-        self.assertEqual(xco2.params.get('timestamp'), '2009-06-15')
+        self.assertEqual(xco2.config.get('var_name'), 'XCO2')
+        self.assertEqual(xco2.config.get('interval'), 86400000)
+        self.assertEqual(xco2.config.get('range'), None)
+        self.assertEqual(xco2.config.get('timestamp'), '2009-06-15')
         
     def test_model_save(self):
         '''Should create proper DataFrame from reading file data'''
@@ -32,7 +32,7 @@ class TestXCO2Data(unittest.TestCase):
 
         # Should allow overrides in the save() method
         df2 = xco2.save(timestamp='2010-01-01')
-        self.assertEqual(xco2.params.get('timestamp'), '2010-01-01')
+        self.assertEqual(xco2.config.get('timestamp'), '2010-01-01')
             
     def test_save_to_db(self):
         '''Should successfully save proper data representation to database'''
@@ -59,10 +59,10 @@ class TestKrigedXCO2Data(unittest.TestCase):
         xco2 = KrigedXCO2Matrix(os.path.join(self.path, 'kriged_xco2.mat'),
             timestamp='2009-06-15')
 
-        self.assertEqual(xco2.params.get('var_name'), 'krigedData')
-        self.assertEqual(xco2.params.get('interval'), None)
-        self.assertEqual(xco2.params.get('range'), 518400000)
-        self.assertEqual(xco2.params.get('timestamp'), '2009-06-15')
+        self.assertEqual(xco2.config.get('var_name'), 'krigedData')
+        self.assertEqual(xco2.config.get('interval'), None)
+        self.assertEqual(xco2.config.get('range'), 518400000)
+        self.assertEqual(xco2.config.get('timestamp'), '2009-06-15')
         
     def test_model_save(self):
         '''Should create proper DataFrame from reading file data'''
@@ -74,7 +74,7 @@ class TestKrigedXCO2Data(unittest.TestCase):
 
         # Should allow overrides in the save() method
         df2 = xco2.save(timestamp='2010-01-01')
-        self.assertEqual(xco2.params.get('timestamp'), '2010-01-01')
+        self.assertEqual(xco2.config.get('timestamp'), '2010-01-01')
             
     def test_save_to_db(self):
         '''Should successfully save proper data representation to database'''

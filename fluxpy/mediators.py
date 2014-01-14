@@ -25,7 +25,7 @@ class Mediator(object):
         '''Add model instances; set optional parameter overrides for all instances added'''
         for each in args:
             for key, value in kwargs.items():
-                each.params[key] = value
+                each.config[key] = value
                 
             self.instances.append(each)
 
@@ -57,7 +57,7 @@ class Grid3DMediator(Mediator):
         
         # Retrieve a cursor to iterate over the records matching the query
         cursor = self.client[self.db_name][collection_name].find(query, {
-            '_id': 0
+            '_id': 0,
             'values': 1,
             'errors': 1,
         })
@@ -85,6 +85,8 @@ class Grid3DMediator(Mediator):
             
             self.instances.append(df)
             
+        return self.instances
+            
     def save_to_db(self, collection_name):
         super(Grid3DMediator, self).save_to_db(collection_name)
 
@@ -92,7 +94,7 @@ class Grid3DMediator(Mediator):
             df = inst.save()
 
             # Expect that a valid timestamp was provided
-            timestamp = inst.params.get('timestamp')
+            timestamp = inst.config.get('timestamp')
             if timestamp is None:
                 raise AttributeError('Expected a model to have a "timestamp" parameter; is this the right model for this Mediator?')
 
@@ -108,7 +110,7 @@ class Grid3DMediator(Mediator):
             # Create the data document itself            
             j = self.client[self.db_name][collection_name].insert({
                 '_id': self.parse_timestamp(timestamp),
-                '_range': int(inst.params['range']) or None,
+                '_range': int(inst.config.get('range')) or None,
                 'values': df['value'].tolist(),
                 'errors': df['error'].tolist()
             })
@@ -141,7 +143,7 @@ class Unstructured3DMediator(Mediator):
                     'timestamp': series['timestamp']
                 })
 
-            if inst.params['geometry'].get('isCollection'):                
+            if inst.config['geometry'].get('isCollection'):                
                 j = self.client[self.db_name][collection_name].insert({
                     'features': features
                 })
