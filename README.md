@@ -11,7 +11,8 @@
 Given the examples of gridded (kriged) and not-gridded XCO2 data, here is the
 process for loading these data into the MongoDB database.
 
-    from fluxpy.mediators import XCO2Matrix, Grid3DMediator
+    from fluxpy.mediators import Grid3DMediator
+    from fluxpy.models import XCO2Matrix
     
     # The mediator understands how 3D gridded data should be stored
     mediator = Grid3DMediator()

@@ -61,7 +61,7 @@ class XCO2Matrix(TransformationInterface):
     '''
     Understands XCO2 data as formatted--Typically 6-day spans of XCO2
     concentrations (ppm) at daily intervals on a latitude-longitude grid.
-    Matrix dimensions: 1311 (observations) x 6 (attributes).
+    Matrix dimensions: 1,311 (observations) x 6 (attributes).
     Columns: Longitude, latitude, XCO2 concentration (ppm), day of the year,
     year, retrieval error (ppm).
     '''
@@ -115,10 +115,13 @@ class XCO2Matrix(TransformationInterface):
         pass
 
     def save(self, *args, **kwargs):
-        # Called by a Mediator class member; should return data in interchange
-        var_name = kwargs.get('var_name') or self.params.get('var_name')
+        '''Creates a DataFrame properly encapsulating the associated file data'''
+
+        # Allow overrides through optional keyword arguments in save()
+        kwargs.setdefault('var_name', self.params.get('var_name'))
+        self.params.update(kwargs)
         
-        if not all((var_name,)):
+        if self.params.get('var_name') is None:
             raise AttributeError('One or more required configuration parameters were not provided')
         
         # HDF5/Matlab file interface
@@ -126,10 +129,11 @@ class XCO2Matrix(TransformationInterface):
         
         # Data frame
         try:
-            df = pd.DataFrame(f.get(var_name)[:], columns=self.params['columns'])
+            df = pd.DataFrame(f.get(self.params.get('var_name'))[:],
+                columns=self.params.get('columns'))
             
         except TypeError:
-            raise ValueError('Could not get at the variable named "%s"' % var_name)
+            raise ValueError('Could not get at the variable named "%s"' % self.params.get('var_name'))
 
         # Add and populate a timestamp field
         t = []
@@ -142,7 +146,7 @@ class XCO2Matrix(TransformationInterface):
         # df = df.loc[:,['x', 'y', 't', 'value', 'error']]
 
         # Fix the precision of data values
-        for col in self.params['formats'].keys():
+        for col in self.params.get('formats').keys():
             df[col] = df[col].map(lambda x: float(self.params['formats'][col] % x))
         
         return df
@@ -171,11 +175,14 @@ class KrigedXCO2Matrix(XCO2Matrix):
     }
     
     def save(self, *args, **kwargs):
-        # Called by a Mediator class member; should return data in interchange
-        var_name = kwargs.get('var_name') or self.params.get('var_name')
-        timestamp = kwargs.get('timestamp') or self.params.get('timestamp')
+        '''Creates a DataFrame properly encapsulating the associated file data'''
 
-        if not all((var_name, timestamp)):
+        # Allow overrides through optional keyword arguments in save()
+        kwargs.setdefault('var_name', self.params.get('var_name'))
+        kwargs.setdefault('timestamp', self.params.get('timestamp'))
+        self.params.update(kwargs)
+
+        if not all((self.params.get('var_name'), self.params.get('timestamp'))):
             raise AttributeError('One or more required configuration parameters were not provided')
 
         # HDF5/Matlab file interface
@@ -183,13 +190,14 @@ class KrigedXCO2Matrix(XCO2Matrix):
 
         # Data frame
         try:
-            df = pd.DataFrame(f.get(var_name)[:], columns=self.params['columns'])
+            df = pd.DataFrame(f.get(self.params.get('var_name'))[:],
+                columns=self.params.get('columns'))
 
         except TypeError:
-            raise ValueError('Could not get at the variable named "%s"' % var_name)
+            raise ValueError('Could not get at the variable named "%s"' % self.params.get('var_name'))
             
         # Fix the precision of data values
-        for col in self.params['formats'].keys():
+        for col in self.params.get('formats').keys():
             df[col] = df[col].map(lambda x: float(self.params['formats'][col] % x))
 
         return df
