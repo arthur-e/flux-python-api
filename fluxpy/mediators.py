@@ -2,7 +2,6 @@
 e.g. /ws4/idata/fluxvis/casa_gfed_inversion_results/1.zerofull_casa_1pm_10twr/Month_Uncert1.mat
 '''
 
-import ipdb
 import datetime, os, sys, re, json, csv
 import pandas as pd
 import numpy as np
@@ -35,7 +34,7 @@ class Mediator(object):
         return self
         
     def load_from_db(self):
-        pass
+        pass # See: http://stackoverflow.com/questions/16249736/how-to-import-data-from-mongodb-to-pandas
         
     def parse_timestamp(self, timestamp):
         '''Parses an ISO 8601 timestamp'''
@@ -61,9 +60,6 @@ class Grid3DMediator(Mediator):
     def save_to_db(self, collection_name):
         super(Grid3DMediator, self).save_to_db(collection_name)
 
-        # Drop the old collection; it will be recreated when inserting.
-        # r = self.client[self.db_name].drop_collection(collection_name)
-
         for inst in self.instances:
             df = inst.save()
 
@@ -83,8 +79,8 @@ class Grid3DMediator(Mediator):
             j = self.client[self.db_name][collection_name].insert({
                 '_id': self.parse_timestamp(timestamp),
                 '_range': int(inst.params['range']) or None,
-                'values': [v for v in df['value']],
-                'errors': [e for e in df['error']]
+                'values': df['value'].tolist(),
+                'errors': df['error'].tolist()
             })
 
 
@@ -103,24 +99,17 @@ class Unstructured3DMediator(Mediator):
         for inst in self.instances:
             df = inst.save()
             
-            tpl = {
-                'coordinates': [],
-                'value': None,
-                'error': None,
-                'timestamp': None
-            }
-
             features = []
             for i, series in df.iterrows():
-                feature = dict(tpl)
-                feature['coordinates'] = map(self.fix, [
-                    series['x'],
-                    series['y']
-                ])
-                feature['value'] = inst.__precision__(series['value'])
-                feature['error'] = inst.__error_precision__(series['error'])
-                feature['timestamp'] = inst.fields.t(series) #FIXME Use column slicing when available
-                features.append(feature)
+                features.append({
+                    'coordinates': [
+                        series['x'],
+                        series['y']
+                    ],
+                    'value': series['value'],
+                    'error': series['error'],
+                    'timestamp': series['timestamp']
+                })
 
             if inst.params['geometry'].get('isCollection'):                
                 j = self.client[self.db_name][collection_name].insert({
@@ -129,11 +118,7 @@ class Unstructured3DMediator(Mediator):
                 
             else:
                 for feature in features:
-                    try:
-                        j = self.client[self.db_name][collection_name].insert(feature)
-                        
-                    except:
-                        ipdb.set_trace()#FIXME
+                    j = self.client[self.db_name][collection_name].insert(feature)
 
 
 

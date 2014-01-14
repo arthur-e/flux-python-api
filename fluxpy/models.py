@@ -136,15 +136,14 @@ class XCO2Matrix(TransformationInterface):
         for i, series in df.iterrows():
             t.append(datetime.datetime(int(series['%Y']), 1, 1) + datetime.timedelta(days=int(series['%j'])))
             
-        df['t'] = pd.Series(t, dtype='datetime64[ns]')
+        df['timestamp'] = pd.Series(t, dtype='datetime64[ns]')
 
         # Re-order columns; dispose of extraneous columns            
         # df = df.loc[:,['x', 'y', 't', 'value', 'error']]
 
         # Fix the precision of data values
-        for column in self.params['columns']:
-            if column in self.params['formats'].keys():
-                df[column].map(lambda x: self.params['formats'][column] % x)
+        for col in self.params['formats'].keys():
+            df[col] = df[col].map(lambda x: float(self.params['formats'][col] % x))
         
         return df
 
@@ -170,7 +169,7 @@ class KrigedXCO2Matrix(XCO2Matrix):
         'header': ('lat', 'lng', 'xco2_ppm', 'error_ppm^2', '', '', '', '', ''),
         'units': ('degrees', 'degrees', 'ppm', 'ppm^2', None, None, None, None, None)
     }
-
+    
     def save(self, *args, **kwargs):
         # Called by a Mediator class member; should return data in interchange
         var_name = kwargs.get('var_name') or self.params.get('var_name')
@@ -188,11 +187,10 @@ class KrigedXCO2Matrix(XCO2Matrix):
 
         except TypeError:
             raise ValueError('Could not get at the variable named "%s"' % var_name)
-
+            
         # Fix the precision of data values
-        for column in self.params['columns']:
-            if column in self.params['formats'].keys():
-                df[column].map(lambda x: self.params['formats'][column] % x)
+        for col in self.params['formats'].keys():
+            df[col] = df[col].map(lambda x: float(self.params['formats'][col] % x))
 
         return df
 
