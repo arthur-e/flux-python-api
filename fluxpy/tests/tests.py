@@ -2,7 +2,7 @@ import unittest, os, csv
 import pandas as pd
 import numpy as np
 import h5py
-from fluxpy.transform import bulk_hdf5_to_csv
+from fluxpy.legacy.transform import bulk_hdf5_to_csv
 
 class TestHDF5(unittest.TestCase):
     '''Tests HDF5 fluency and conversion utilities.'''
