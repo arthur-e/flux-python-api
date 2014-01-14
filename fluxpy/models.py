@@ -50,12 +50,6 @@ class TransformationInterface:
         else:
             self.params = self.defaults
 
-    def __error_precision__(self, value):
-        return round(value, 4)
-
-    def __precision__(self, value):
-        return round(value, 2)
-
     def dump(self, data):
         pass
 
@@ -74,7 +68,13 @@ class XCO2Matrix(TransformationInterface):
     defaults = {
         'var_name': 'XCO2',
         'interval': 86400000, # 1 day (daily) in ms
-        'columns': ('x', 'y', 'value', None, None, 'error'),
+        'columns': ('x', 'y', 'value', '%j', '%Y', 'error'),
+        'formats': {
+            'x': '%.5f',
+            'y': '%.5f',
+            'value': '%.2f',
+            'error': '%.4f'
+        },
         'header': ('lng', 'lat', 'xco2_ppm', 'day', 'year', 'error_ppm'),
         'units': ('degrees', 'degrees', 'ppm', None, None, 'ppm^2'),
         'geometry': {
@@ -85,16 +85,6 @@ class XCO2Matrix(TransformationInterface):
 
     path_regex = re.compile(r'.+\.(?P<extension>mat|h5)')
     
-    #TODO Remove Fields; reshape Data Frame with only y, x, value, error, and t columns
-    class Fields:
-        '''Field getters; returns the corresponding value from a given series'''
-        x = lambda z, s: s[0]
-        y = lambda z, s: s[1]
-        t = lambda z, s: datetime.datetime(int(s[4]), 1, 1) + datetime.timedelta(days=int(s[3]))
-        ident = lambda z, s: None
-        value = lambda z, s: s[2]
-        error = lambda z, s: s[5]
-
     def __init__(self, path, **kwargs):
         if self.path_regex.match(path) is None:
             raise AttributeError('Only Matlab (*.mat) and HDF5 (*.h5 or *.mat) files are accepted')
@@ -121,12 +111,6 @@ class XCO2Matrix(TransformationInterface):
         # Remember the path to the file
         self.filename = path
         
-        # Set up field getters
-        self.fields = self.Fields()
-    
-    def __precision__(self, value):
-        return round(value, 2)
-
     def dump(self, data):
         pass
 
@@ -146,10 +130,21 @@ class XCO2Matrix(TransformationInterface):
             
         except TypeError:
             raise ValueError('Could not get at the variable named "%s"' % var_name)
-        
+
+        # Add and populate a timestamp field
+        t = []
+        for i, series in df.iterrows():
+            t.append(datetime.datetime(int(series['%Y']), 1, 1) + datetime.timedelta(days=int(series['%j'])))
+            
+        df['t'] = pd.Series(t, dtype='datetime64[ns]')
+
+        # Re-order columns; dispose of extraneous columns            
+        # df = df.loc[:,['x', 'y', 't', 'value', 'error']]
+
         # Fix the precision of data values
-        df['value'] = df['value'].apply(self.__precision__)
-        df['error'] = df['error'].apply(self.__error_precision__)
+        for column in self.params['columns']:
+            if column in self.params['formats'].keys():
+                df[column].map(lambda x: self.params['formats'][column] % x)
         
         return df
 
@@ -165,23 +160,16 @@ class KrigedXCO2Matrix(XCO2Matrix):
         'var_name': 'krigedData',
         'interval': None,
         'range': 518400000, # 6 days
-        'columns': ('y', 'x', 'value', 'error', '', '', '', '', ''),
+        'columns': ('y', 'x', 'value', 'error', '4', '5', '6', '7', '8'),
+        'formats': {
+            'x': '%.5f',
+            'y': '%.5f',
+            'value': '%.2f',
+            'error': '%.4f'
+        },
         'header': ('lat', 'lng', 'xco2_ppm', 'error_ppm^2', '', '', '', '', ''),
-        'units': ('degrees', 'degrees', 'ppm', 'ppm^2')
+        'units': ('degrees', 'degrees', 'ppm', 'ppm^2', None, None, None, None, None)
     }
-    
-    #TODO Remove Fields; reshape Data Frame with only y, x, value, error, and t columns
-    class Fields:
-        '''Field getters; returns the corresponding value from a given Series'''
-        x = lambda z, s: s[1]
-        y = lambda z, s: s[0]
-        t = lambda z, s: datetime.datetime(int(s[4]), 1, 1) + datetime.timedelta(days=s[3])
-        ident = lambda z, s: None
-        value = lambda z, s: s[2]
-        error = lambda z, s: s[3]
-
-    def __precision__(self, value):
-        return round(value, 2)
 
     def save(self, *args, **kwargs):
         # Called by a Mediator class member; should return data in interchange
@@ -202,8 +190,9 @@ class KrigedXCO2Matrix(XCO2Matrix):
             raise ValueError('Could not get at the variable named "%s"' % var_name)
 
         # Fix the precision of data values
-        df['value'] = df['value'].apply(self.__precision__)
-        df['error'] = df['error'].apply(self.__error_precision__)
+        for column in self.params['columns']:
+            if column in self.params['formats'].keys():
+                df[column].map(lambda x: self.params['formats'][column] % x)
 
         return df
 

@@ -62,7 +62,7 @@ class Grid3DMediator(Mediator):
         super(Grid3DMediator, self).save_to_db(collection_name)
 
         # Drop the old collection; it will be recreated when inserting.
-        r = self.client[self.db_name].drop_collection(collection_name)
+        # r = self.client[self.db_name].drop_collection(collection_name)
 
         for inst in self.instances:
             df = inst.save()
@@ -70,11 +70,14 @@ class Grid3DMediator(Mediator):
             # Expect that a valid timestamp was provided
             timestamp = inst.params['timestamp']
 
-            # Create the index of grid cell coordinates
-            i = self.client[self.db_name]['coord_index'].insert({
-                '_id': collection_name,
-                'i': [i for i in df.apply(lambda c: [c['x'], c['y']], 1)]
-            })
+            # Create the index of grid cell coordinates, if needed
+            if self.client[self.db_name]['coord_index'].find({
+                '_id': collection_name
+            }) is None:
+                i = self.client[self.db_name]['coord_index'].insert({
+                    '_id': collection_name,
+                    'i': [i for i in df.apply(lambda c: [c['x'], c['y']], 1)]
+                })
 
             # Create the data document itself            
             j = self.client[self.db_name][collection_name].insert({
@@ -96,9 +99,6 @@ class Unstructured3DMediator(Mediator):
     
     def save_to_db(self, collection_name):
         super(Unstructured3DMediator, self).save_to_db(collection_name)
-
-        # Drop the old collection; it will be recreated when inserting.
-        r = self.client[self.db_name].drop_collection(collection_name)
 
         for inst in self.instances:
             df = inst.save()
