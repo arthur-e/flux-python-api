@@ -43,6 +43,17 @@ class Mediator(object):
         '''Transforms contents of Data Frame into JSON representation for MongoDB'''
         if collection_name in RESERVED_COLLECTION_NAMES:
             raise ValueError('The collection name provided is a reserved name')
+            
+    def update_summary_stats(self, model, collection_name, query={}):
+        '''Inserts or updates the summary stats document for a model-collection pair'''
+        
+        if self.client[self.db_name]['summary_stats'].find({
+            'about_collection': collection_name
+        }).count() > 0:
+            self.client[self.db_name]['summary_stats'].remove()
+            
+        self.client[self.db_name]['summary_stats'].insert(self.summarize(model,
+            collection_name, query))
 
 
 class Grid3DMediator(Mediator):
@@ -107,14 +118,36 @@ class Grid3DMediator(Mediator):
                     'i': [i for i in df.apply(lambda c: [c['x'], c['y']], 1)]
                 })
 
-            # Create the data document itself            
-            j = self.client[self.db_name][collection_name].insert({
+            # Create the data document itself
+            data_dict = {
                 '_id': self.parse_timestamp(timestamp),
-                '_range': int(inst.config.get('range')) or None,
-                'values': df['value'].tolist(),
-                'errors': df['error'].tolist()
-            })
+                '_range': int(inst.config.get('range')) or None
+            }
+            
+            for param in inst.config.get('parameters'):
+                data_dict[param] = df[param].tolist()
+                
+            j = self.client[self.db_name][collection_name].insert(data_dict)
 
+    def summarize(self, model, collection_name, query={}):
+        dfs = self.load_from_db(collection_name, query)
+        
+        # Merge them into a single, large data frame
+        df = pd.concat(dfs)
+        
+        summary = {}
+        for param in model.defaults.get('parameters'):
+            # Axis 0 is the "row-wise" axis
+            summary[param] = {
+                'mean': df.mean(0)[param],
+                'min': df.min(0)[param],
+                'max': df.max(0)[param],
+                'std': df.std(0)[param],
+                'median': df.median(0)[param]
+            }
+            
+        return summary
+        
 
 class Unstructured3DMediator(Mediator):
     '''
@@ -122,8 +155,6 @@ class Unstructured3DMediator(Mediator):
     positions given as longitude-latitude pairs; two spatial dimensions, one
     value dimension (3D).
     '''
-    def fix(self, value, precision=5):
-        return round(value, precision)
     
     def save_to_db(self, collection_name):
         super(Unstructured3DMediator, self).save_to_db(collection_name)
@@ -143,7 +174,7 @@ class Unstructured3DMediator(Mediator):
                     'timestamp': series['timestamp']
                 })
 
-            if inst.config['geometry'].get('isCollection'):                
+            if inst.config.get('geometry').get('isCollection'):                
                 j = self.client[self.db_name][collection_name].insert({
                     'features': features
                 })

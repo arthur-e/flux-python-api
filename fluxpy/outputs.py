@@ -17,6 +17,11 @@ class KMLView:
     Writes out KML files from spatio-temporal data provided by a Mediator.
     '''
     filename_pattern = 'output%d.kml' # Must have %d format string in name
+    styles = {
+        'BrBG': [
+            KML.Style(id='')
+        ]
+    }
     
     def __init__(self, mediator, model, collection_name):
         self.mediator = mediator

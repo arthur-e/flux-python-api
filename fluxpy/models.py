@@ -18,13 +18,14 @@ class TransformationInterface:
     argument which is the interchange datum (a dictionary). A configuration
     file may be provided as a *.json file with the same name as the data file.
     '''
-    defaults = {
+    defaults = { #TODO Have these config parameters applied as attributes in subclasses?
         'var_name': None, # The Matlab/HDF5 variable of interst
         'interval': None, # The time interval (ms) between observations (documents)
         'range': None, # The amount of time (ms) for which the measurements are valid after the timestamp
         'columns': None, # The column order
         'header': None, # The human-readable column headers, in order
         'units': None, # The units of measurement, in order
+        'parameters': None, # The names of those data fields other than space and time fields
         'geometry': { # Only applies for non-structured data
             # True to specify that each document is a FeatureCollection; if False,
             #   each row will be stored as a separate document (a separate simple feature)
@@ -39,6 +40,7 @@ class TransformationInterface:
     }
 
     def __init__(self, path=None):
+        #TODO Have the collection_name specified in each instance?
         # Check to see if a config file with the same name exists
         config = os.path.join('.'.join(path.split('.')[:-1]), '.json')
         if os.path.exists(config):
@@ -72,12 +74,13 @@ class XCO2Matrix(TransformationInterface):
             'value': '%.2f',
             'error': '%.4f'
         },
-        'header': ('lng', 'lat', 'xco2_ppm', 'day', 'year', 'error_ppm'),
-        'units': ('degrees', 'degrees', 'ppm', None, None, 'ppm^2'),
         'geometry': {
             'isCollection': False,
             'type': 'Point'
-        }
+        },
+        'header': ('lng', 'lat', 'xco2_ppm', 'day', 'year', 'error_ppm'),
+        'parameters': ('value', 'error'),
+        'units': ('degrees', 'degrees', 'ppm', None, None, 'ppm^2')
     }
 
     path_regex = re.compile(r'.+\.(?P<extension>mat|h5)')
@@ -168,12 +171,13 @@ class KrigedXCO2Matrix(XCO2Matrix):
             'error': '%.4f'
         },
         'header': ('lat', 'lng', 'xco2_ppm', 'error_ppm^2', '', '', '', '', ''),
-        'units': ('degrees', 'degrees', 'ppm', 'ppm^2', None, None, None, None, None),
+        'parameters': ('value', 'error'),
         'resolution': {
             'x_length': 0.5,
             'y_length': 0.5,
             'units': 'degrees'
-        }
+        },
+        'units': ('degrees', 'degrees', 'ppm', 'ppm^2', None, None, None, None, None)
     }
     
     def save(self, *args, **kwargs):
