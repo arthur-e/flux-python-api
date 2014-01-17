@@ -38,18 +38,23 @@ class KMLView:
         std = series.std()
         return series.apply(lambda x: x - mean).apply(lambda x: x * (1/std))
 
-    def __square_bounds__(self, coords):
+    def __square_bounds__(self, coords, altitude=None):
         # For this gridded product, assume square cells; get grid cell resolution
         gridres = self.model.defaults.get('resolution').get('x_length')
-        
+
         # Get the rectangular bounds of the model cell at the grid resolution
-        bounds = bounds=map(str, Point(coords).buffer(gridres, 4).bounds)
+        bounds = map(str, Point(coords).buffer(gridres, 4).bounds)
+        
+        coords = ((bounds[0], bounds[1]), (bounds[0], bounds[3]),
+            (bounds[2], bounds[3]), (bounds[2], bounds[1]),
+            (bounds[0], bounds[1]))
 
         # Permute corner creation from bounds; bounds=(minx, miny, maxx, maxy)
-        return ' '.join((','.join((bounds[0], bounds[1])), ','.join((bounds[0], bounds[3])),
-            ','.join((bounds[2], bounds[3])), ','.join((bounds[2], bounds[1])),
-            ','.join((bounds[0], bounds[1]))))
+        if altitude is not None:
+            coords = map(lambda c: (c[0], c[1], str(altitude)), coords)
             
+        return ' '.join(map(lambda c: ','.join(c), coords))
+
     def __query__(self, query_object):
         return self.mediator.load_from_db(self.collection_name, query_object)
 
@@ -86,20 +91,21 @@ class KMLView:
             placemarks = []
 
             # Calculate z scores for the values
-            dfs[i]['score'] = self.__scores__(dfs[i]['value']).apply(math.ceil)
+            dfs[i]['score'] = self.__scores__(dfs[i][keys[0]]).apply(math.ceil)
 
             # Iterate through the rows of the Data Frame
             for j, series in dfs[i].iterrows():
-                coords = self.__square_bounds__((series['x'], series['y']))
+                altitude = (series[keys[1]] * 100000) 
+                coords = self.__square_bounds__((series['x'], series['y']), altitude)
 
                 placemarks.append(KML.Placemark(
                     KML.description(desc_tpl.format(**dict(series))),
-                    #KML.extrude(1),
-                    #KML.tesselate(1),
                     KML.styleUrl(self.__score_style__(series['score'], 'BrBG11')),
                     KML.Polygon(
                         KML.outerBoundaryIs(
                             KML.LinearRing(
+                                KML.extrude(1),
+                                KML.altitudeMode('absolute'),
                                 KML.coordinates(*coords))))))
 
             preamble = list(self.styles.get('BrBG11'))
