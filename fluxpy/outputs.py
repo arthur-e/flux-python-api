@@ -7,7 +7,7 @@ from pykml.factory import KML_ElementMaker as KML
 from lxml import etree
 from shapely.geometry import Point
 from fluxpy import DB, DEFAULT_PATH, RESERVED_COLLECTION_NAMES
-from fluxpy.utils import *
+from fluxpy.colors import *
 
 class KMLView:
     '''
@@ -31,6 +31,12 @@ class KMLView:
             style = '%s+' % style
             
         return ('#%s%d' % (style, score)).lower()
+        
+    def __scores__(self, series):
+        # Calculates z scores for a given series
+        mean = series.mean()
+        std = series.std()
+        return series.apply(lambda x: x - mean).apply(lambda x: x * (1/std))
 
     def __square_bounds__(self, coords):
         # For this gridded product, assume square cells; get grid cell resolution
@@ -46,12 +52,6 @@ class KMLView:
             
     def __query__(self, query_object):
         return self.mediator.load_from_db(self.collection_name, query_object)
-
-    def __z_scores__(self, series):
-        # Calculates z scores for a given series
-        mean = series.mean()
-        std = series.std()
-        return series.apply(lambda x: x - mean).apply(lambda x: x * (1/std))
 
     def static_3d_grid_view(self, query, output_path, keys=('value', 'error')):
         '''
@@ -86,7 +86,7 @@ class KMLView:
             placemarks = []
 
             # Calculate z scores for the values
-            dfs[i]['score'] = self.__z_scores__(dfs[i]['value']).apply(math.ceil)
+            dfs[i]['score'] = self.__scores__(dfs[i]['value']).apply(math.ceil)
 
             # Iterate through the rows of the Data Frame
             for j, series in dfs[i].iterrows():
