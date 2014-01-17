@@ -135,7 +135,10 @@ class Grid3DMediator(Mediator):
         # Merge them into a single, large data frame
         df = pd.concat(dfs)
         
-        summary = {}
+        summary = {
+            '_id': collection_name
+        }
+        
         for param in model.defaults.get('parameters'):
             # Axis 0 is the "row-wise" axis
             summary[param] = {

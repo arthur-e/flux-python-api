@@ -3,7 +3,7 @@ For generating specific, derived outputs from spatio-temporal data.
 '''
 
 import ipdb#FIXME
-import datetime, os, sys, re
+import datetime, os, sys, re, math
 import pandas as pd
 from pykml.factory import KML_ElementMaker as KML
 from pykml import parser as kml_parser
@@ -18,8 +18,51 @@ class KMLView:
     '''
     filename_pattern = 'output%d.kml' # Must have %d format string in name
     styles = {
-        'BrBG': [
-            KML.Style(id='')
+        'BrBG11': [
+            KML.Style(
+                KML.LineStyle(KML.width(0)),
+                KML.PolyStyle(KML.color('ff303c00')),
+                    id='brbg11-5'),
+            KML.Style(
+                KML.LineStyle(KML.width(0)),
+                KML.PolyStyle(KML.color('ff5e6601')),
+                    id='brbg11-4'),
+            KML.Style(
+                KML.LineStyle(KML.width(0)),
+                KML.PolyStyle(KML.color('ff8f9735')),
+                    id='brbg11-3'),
+            KML.Style(
+                KML.LineStyle(KML.width(0)),
+                KML.PolyStyle(KML.color('ffc1cd80')),
+                    id='brbg11-2'),
+            KML.Style(
+                KML.LineStyle(KML.width(0)),
+                KML.PolyStyle(KML.color('ffe5eac7')),
+                    id='brbg11-1'),
+            KML.Style(
+                KML.LineStyle(KML.width(0)),
+                KML.PolyStyle(KML.color('fff5f5f5')),
+                    id='brbg11+0'),
+            KML.Style(
+                KML.LineStyle(KML.width(0)),
+                KML.PolyStyle(KML.color('ffc3e8f6')),
+                    id='brbg11+1'),
+            KML.Style(
+                KML.LineStyle(KML.width(0)),
+                KML.PolyStyle(KML.color('ff7dc2df')),
+                    id='brbg11+2'),
+            KML.Style(
+                KML.LineStyle(KML.width(0)),
+                KML.PolyStyle(KML.color('ff2d81bf')),
+                    id='brbg11+3'),
+            KML.Style(
+                KML.LineStyle(KML.width(0)),
+                KML.PolyStyle(KML.color('ff0a518c')),
+                    id='brbg11+4'),
+            KML.Style(
+                KML.LineStyle(KML.width(0)),
+                KML.PolyStyle(KML.color('ff053054')),
+                    id='brbg11+5')
         ]
     }
     
@@ -29,7 +72,14 @@ class KMLView:
         self.collection_name = collection_name
         self.field_units = dict(zip(model.defaults.get('columns'),
             model.defaults.get('units')))
-        
+
+    def __score_style__(self, score, style):
+        # Calculates the style ID of the color to use
+        if score > 0:
+            style = '%s+' % style
+            
+        return ('#%s%d' % (style, score)).lower()
+
     def __square_bounds__(self, coords):
         # For this gridded product, assume square cells; get grid cell resolution
         gridres = self.model.defaults.get('resolution').get('x_length')
@@ -38,12 +88,16 @@ class KMLView:
         bounds = bounds=map(str, Point(coords).buffer(gridres, 4).bounds)
 
         # Permute corner creation from bounds; bounds=(minx, miny, maxx, maxy)
-        return (','.join((bounds[0], bounds[1])), ','.join((bounds[0], bounds[3])),
+        return ' '.join((','.join((bounds[0], bounds[1])), ','.join((bounds[0], bounds[3])),
             ','.join((bounds[2], bounds[3])), ','.join((bounds[2], bounds[1])),
-            ','.join((bounds[0], bounds[1])))
-        
+            ','.join((bounds[0], bounds[1]))))
+            
     def __query__(self, query_object):
         return self.mediator.load_from_db(self.collection_name, query_object)
+
+    def __z_scores__(self, series):
+        # Calculates z scores for a given series
+        return series.apply(lambda x: x - series.mean()).apply(lambda x: x / series.std())
 
     def static_3d_grid_view(self, query, output_path, keys=('value', 'error')):
         '''
@@ -66,37 +120,54 @@ class KMLView:
         if len(keys) > 1:
             desc_tpl += '<h4>{k2}: %s {u2}<h4>'.format(k2=keys[1],
                 u2=self.field_units[keys[1]])
-                
+
             desc_tpl = desc_tpl % ('{%s}' % keys[0], '{%s}' % keys[1])
-            
+
         else:
             desc_tpl = desc_tpl % ('{%s}' % keys[0])
-            
+
         # Iterate through the returned DataFrames
         i = 0
         while i < len(dfs):
             placemarks = []
-        
+
+            # Calculate z scores for the values
+            dfs[i]['score'] = self.__z_scores__(dfs[i]['value']).apply(math.ceil)
+
             # Iterate through the rows of the Data Frame
             for j, series in dfs[i].iterrows():
                 coords = self.__square_bounds__((series['x'], series['y']))
-            
+
                 placemarks.append(KML.Placemark(
                     KML.description(desc_tpl.format(**dict(series))),
-                    KML.extrude(1),
-                    KML.tesselate(1),
+                    #KML.extrude(1),
+                    #KML.tesselate(1),
+                    KML.styleUrl(self.__score_style__(series['score'], 'BrBG11')),
                     KML.Polygon(
                         KML.outerBoundaryIs(
                             KML.LinearRing(
                                 KML.coordinates(*coords))))))
-        
-            doc = KML.Document(
+
+            preamble = list(self.styles.get('BrBG11'))
+            preamble.extend([
                 KML.name(self.collection_name),
-                KML.Folder(KML.name(self.collection_name), *placemarks))
+                KML.Folder(KML.name(self.collection_name), *placemarks)
+            ])
+            
+            doc = KML.Document(*preamble)
 
             with open(os.path.join(output_path, self.filename_pattern % i), 'wb') as stream:
                 stream.write(etree.tostring(doc))
                 
             i += 1
+
+
+if __name__ == '__main__':
+    from fluxpy.mediators import *
+    from fluxpy.models import *
+    kml = KMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
+    kml.static_3d_grid_view({}, '/home/kaendsle/Desktop/')
+
+
 
 
