@@ -2,15 +2,12 @@
 For generating specific, derived outputs from spatio-temporal data.
 '''
 
-import ipdb#FIXME
 import datetime, os, sys, re, math
-import pandas as pd
 from pykml.factory import KML_ElementMaker as KML
-from pykml import parser as kml_parser
 from lxml import etree
 from shapely.geometry import Point
-from pymongo import MongoClient
 from fluxpy import DB, DEFAULT_PATH, RESERVED_COLLECTION_NAMES
+from fluxpy.utils import *
 
 class KMLView:
     '''
@@ -18,52 +15,7 @@ class KMLView:
     '''
     filename_pattern = 'output%d.kml' # Must have %d format string in name
     styles = {
-        'BrBG11': [
-            KML.Style(
-                KML.LineStyle(KML.width(0)),
-                KML.PolyStyle(KML.color('ff303c00')),
-                    id='brbg11-5'),
-            KML.Style(
-                KML.LineStyle(KML.width(0)),
-                KML.PolyStyle(KML.color('ff5e6601')),
-                    id='brbg11-4'),
-            KML.Style(
-                KML.LineStyle(KML.width(0)),
-                KML.PolyStyle(KML.color('ff8f9735')),
-                    id='brbg11-3'),
-            KML.Style(
-                KML.LineStyle(KML.width(0)),
-                KML.PolyStyle(KML.color('ffc1cd80')),
-                    id='brbg11-2'),
-            KML.Style(
-                KML.LineStyle(KML.width(0)),
-                KML.PolyStyle(KML.color('ffe5eac7')),
-                    id='brbg11-1'),
-            KML.Style(
-                KML.LineStyle(KML.width(0)),
-                KML.PolyStyle(KML.color('fff5f5f5')),
-                    id='brbg11+0'),
-            KML.Style(
-                KML.LineStyle(KML.width(0)),
-                KML.PolyStyle(KML.color('ffc3e8f6')),
-                    id='brbg11+1'),
-            KML.Style(
-                KML.LineStyle(KML.width(0)),
-                KML.PolyStyle(KML.color('ff7dc2df')),
-                    id='brbg11+2'),
-            KML.Style(
-                KML.LineStyle(KML.width(0)),
-                KML.PolyStyle(KML.color('ff2d81bf')),
-                    id='brbg11+3'),
-            KML.Style(
-                KML.LineStyle(KML.width(0)),
-                KML.PolyStyle(KML.color('ff0a518c')),
-                    id='brbg11+4'),
-            KML.Style(
-                KML.LineStyle(KML.width(0)),
-                KML.PolyStyle(KML.color('ff053054')),
-                    id='brbg11+5')
-        ]
+        'BrBG11': DivergingColors('brbg11').kml_styles(outlines=False, alpha=1.0)
     }
     
     def __init__(self, mediator, model, collection_name):
@@ -75,7 +27,7 @@ class KMLView:
 
     def __score_style__(self, score, style):
         # Calculates the style ID of the color to use
-        if score > 0:
+        if score >= 0:
             style = '%s+' % style
             
         return ('#%s%d' % (style, score)).lower()
@@ -97,7 +49,9 @@ class KMLView:
 
     def __z_scores__(self, series):
         # Calculates z scores for a given series
-        return series.apply(lambda x: x - series.mean()).apply(lambda x: x / series.std())
+        mean = series.mean()
+        std = series.std()
+        return series.apply(lambda x: x - mean).apply(lambda x: x * (1/std))
 
     def static_3d_grid_view(self, query, output_path, keys=('value', 'error')):
         '''
