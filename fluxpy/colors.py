@@ -18,9 +18,6 @@ class AbstractColors:
             elif isinstance(base, list) or isinstance(base, tuple):
                 self.base = base
 
-    def rgb2hex(self, r, g, b):
-        return '#{:02x}{:02x}{:02x}'.format(r, g, b)
-
     def hex_colors(self):
         '''Generates hexadecimal color codes for each color in the ramp'''
         return map(lambda x: self.rgb2hex(*map(int, x.strip('rgb()').split(','))),
@@ -34,6 +31,12 @@ class AbstractColors:
             'g': c[3:5],
             'b': c[5:7]
         })), self.hex_colors())
+
+    def legend_entries(self):
+        return zip(self.hex_colors(), self.labels())
+
+    def rgb2hex(self, r, g, b):
+        return '#{:02x}{:02x}{:02x}'.format(r, g, b)
 
 
 class DivergingColors(AbstractColors):
@@ -57,6 +60,27 @@ class DivergingColors(AbstractColors):
         'rgb(1,102,94)',
         'rgb(0,60,48)'
     ]
+
+    def labels(self):
+        '''Generate a list of text labels to use for the colors'''
+        labels = []
+
+        # Initialize the z-score counter (for diverging color scale, the number
+        #   of z-scores possible is the number of available classes minus 1
+        #   divided by half)
+        i = int(math.floor(len(self.base) * 0.5))
+        for color in self.base:
+            if i >= 0:
+                code = 'z Score: +%d' % i
+
+            else:
+                code = 'z Score: %d' % i
+
+            labels.append(code)
+
+            i -= 1 # Counting down
+
+        return labels
     
     def kml_styles(self, outlines=False, alpha=1.0):
         '''Generates PyKML <Style> instances for each color in the ramp'''

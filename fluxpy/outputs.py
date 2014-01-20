@@ -2,22 +2,76 @@
 For generating specific, derived outputs from spatio-temporal data.
 '''
 
+import ipdb#FIXME
 import datetime, os, sys, re, math
+import matplotlib.pyplot as plt; plt.rcdefaults()
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.collections import PatchCollection
 from pykml.factory import KML_ElementMaker as KML
 from lxml import etree
 from shapely.geometry import Point
 from fluxpy import DB, DEFAULT_PATH, RESERVED_COLLECTION_NAMES
 from fluxpy.colors import *
 
+class Legend:
+    '''
+    A legend for a classification scheme based on colored parcels. The entries
+    are drawn as square cells in a vertical list.
+    '''
+
+    def __init__(self, entries, scale_name=None):
+        # Unzip a sequence of (color, label) tuples
+        self.colors, self.labels = zip(*entries)
+        fig, self.ax = plt.subplots()
+        self.filename = '%s.png' % (scale_name or 'legend')
+
+    def __label__(self, xy, text, item_width):
+        # Calls a text label on the plot
+        plt.text(xy[0] + (item_width * 1.5), xy[1], text, ha='left', va='bottom',
+            family='sans-serif', size=13)
+
+    def render(self, patch_size=0.5, alpha=1.0):
+        '''Draws the legend graphic and saves it to a file.'''
+        n = len(self.colors)
+        s = patch_size
+
+        # Create grid to plot the artists
+        grid = np.concatenate((
+            np.ones(n).reshape(n, 1),
+            np.arange(n + 1)[1:].reshape(n, 1)
+        ), axis=1)
+
+        patches = []
+        for i in range(n):
+            # Add a rectangle
+            rect = mpatches.Rectangle(grid[i] - [0.01, 0.01], s, s, ec='none')
+            patches.append(rect)
+            self.__label__(grid[i], self.labels[1], patch_size)
+
+        colors = np.linspace(0, 1, len(patches))
+        collection = PatchCollection(patches, cmap=plt.cm.hsv, alpha=alpha)
+        collection.set_facecolors(self.colors)
+        self.ax.add_collection(collection)
+
+        plt.subplots_adjust(left=0, right=1, bottom=0, top=1)
+        plt.axis('equal')
+        plt.axis('off')
+
+        plt.savefig(self.filename)
+
+
 class KMLView:
     '''
     Writes out KML files from spatio-temporal data provided by a Mediator.
     '''
+    alpha = 1.0
     filename_pattern = 'output%d.kml' # Must have %d format string in name
-    styles = {
-        'BrBG11': DivergingColors('brbg11').kml_styles(outlines=False, alpha=1.0)
+    colors = {
+        'BrBG11': DivergingColors('brbg11')
     }
-    
+
     def __init__(self, mediator, model, collection_name):
         self.mediator = mediator
         self.model = model
@@ -25,13 +79,19 @@ class KMLView:
         self.field_units = dict(zip(model.defaults.get('columns'),
             model.defaults.get('units')))
 
+    def __legend__(self, style, path):
+        return KML.ScreenOverlay(
+            KML.overlayXY(x='0.0', y='0.0', xunits='fraction', yunits='fraction'),
+            KML.screenXY(x='0.05', y='0.05', xunits='fraction', yunits='fraction'),
+            KML.icon(KML.href(path)))
+
     def __score_style__(self, score, style):
         # Calculates the style ID of the color to use
         if score >= 0:
             style = '%s+' % style
-            
+
         return ('#%s%d' % (style, score)).lower()
-        
+
     def __scores__(self, series):
         # Calculates z scores for a given series
         mean = series.mean()
@@ -44,15 +104,17 @@ class KMLView:
 
         # Get the rectangular bounds of the model cell at the grid resolution
         bounds = map(str, Point(coords).buffer(gridres, 4).bounds)
-        
-        coords = ((bounds[0], bounds[1]), (bounds[0], bounds[3]),
-            (bounds[2], bounds[3]), (bounds[2], bounds[1]),
-            (bounds[0], bounds[1]))
 
+        # Coordinates should be specified counter-clockwise
+        # (https://developers.google.com/kml/documentation/kmlreference#polygon)
         # Permute corner creation from bounds; bounds=(minx, miny, maxx, maxy)
+        coords = ((bounds[0], bounds[3]), (bounds[0], bounds[1]),
+            (bounds[2], bounds[1]), (bounds[2], bounds[3]),
+            (bounds[0], bounds[3]))
+
         if altitude is not None:
             coords = map(lambda c: (c[0], c[1], str(altitude)), coords)
-            
+
         return ' '.join(map(lambda c: ','.join(c), coords))
 
     def __query__(self, query_object):
@@ -67,7 +129,7 @@ class KMLView:
         cell has a single longitude-latitude pair describing its centroid.
         '''
         dfs = self.__query__(query)
-        
+
         if not os.path.exists(output_path):
             raise ValueError('The specified output_path does not exist or cannot be read')
 
@@ -91,34 +153,41 @@ class KMLView:
             placemarks = []
 
             # Calculate z scores for the values
-            dfs[i]['score'] = self.__scores__(dfs[i][keys[0]]).apply(math.ceil)
+            dfs[i]['z%s' % keys[0]] = self.__scores__(dfs[i][keys[0]]).apply(math.ceil)
+            dfs[i]['z%s' % keys[1]] = self.__scores__(dfs[i][keys[1]]).apply(lambda x: math.ceil(x) + 1 if x > 0 else 1)
+
+            # Generate a legend graphic and get the <ScreenOverlay> element for such a graphic
+            legend = Legend(self.colors.get(style).legend_entries(), 'BrBG11')
+            legend_overlay = self.__legend__('BrBG11', legend.filename) #TODO
 
             # Iterate through the rows of the Data Frame
             for j, series in dfs[i].iterrows():
-                altitude = (series[keys[1]] * 100000) 
+                altitude = (series['z%s' % keys[1]] * 100000) 
                 coords = self.__square_bounds__((series['x'], series['y']), altitude)
 
                 placemarks.append(KML.Placemark(
                     KML.description(desc_tpl.format(**dict(series))),
-                    KML.styleUrl(self.__score_style__(series['score'], 'BrBG11')),
+                    KML.styleUrl(self.__score_style__(series['z%s' % keys[0]], 'BrBG11')),
                     KML.Polygon(
+                        KML.extrude(1),
+                        KML.altitudeMode('absolute'),
                         KML.outerBoundaryIs(
                             KML.LinearRing(
-                                KML.extrude(1),
-                                KML.altitudeMode('absolute'),
                                 KML.coordinates(*coords))))))
 
-            preamble = list(self.styles.get('BrBG11'))
+            preamble = list(self.colors.get('BrBG11').kml_styles(outlines=False,
+                alpha=self.alpha))
             preamble.extend([
                 KML.name(self.collection_name),
+                legend_overlay, # The <ScreenOverlay> element
                 KML.Folder(KML.name(self.collection_name), *placemarks)
             ])
-            
+
             doc = KML.Document(*preamble)
 
             with open(os.path.join(output_path, self.filename_pattern % i), 'wb') as stream:
                 stream.write(etree.tostring(doc))
-                
+
             i += 1
 
 
