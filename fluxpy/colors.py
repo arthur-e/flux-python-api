@@ -70,8 +70,11 @@ class DivergingColors(AbstractColors):
         #   divided by half)
         i = int(math.floor(len(self.base) * 0.5))
         for color in self.base:
-            if i >= 0:
+            if i > 0:
                 code = 'z Score: +%d' % i
+
+            elif i == 0:
+                code = 'Mean'
 
             else:
                 code = 'z Score: %d' % i

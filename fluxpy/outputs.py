@@ -4,7 +4,7 @@ For generating specific, derived outputs from spatio-temporal data.
 
 import ipdb#FIXME
 import datetime, os, sys, re, math
-import matplotlib.pyplot as plt; plt.rcdefaults()
+import matplotlib.pyplot as plt#; plt.rcdefaults()
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -24,13 +24,18 @@ class Legend:
     def __init__(self, entries, scale_name=None):
         # Unzip a sequence of (color, label) tuples
         self.colors, self.labels = zip(*entries)
-        fig, self.ax = plt.subplots()
+        self.dpi = 92
+        self.figure, self.axis = plt.subplots()
         self.filename = '%s.png' % (scale_name or 'legend')
 
-    def __label__(self, xy, text, item_width):
+        self.axis.set_axis_off()
+        self.figure.set_tight_layout(True)
+        self.figure.set_size_inches(3, 6)
+
+    def __label__(self, xy, text):
         # Calls a text label on the plot
-        plt.text(xy[0] + (item_width * 1.5), xy[1], text, ha='left', va='bottom',
-            family='sans-serif', size=13)
+        plt.text(xy[0], xy[1], text, ha='left', va='bottom',
+            family='sans-serif', size=13, color='#ffffff')
 
     def render(self, patch_size=0.5, alpha=1.0):
         '''Draws the legend graphic and saves it to a file.'''
@@ -39,27 +44,31 @@ class Legend:
 
         # Create grid to plot the artists
         grid = np.concatenate((
-            np.ones(n).reshape(n, 1),
+            np.zeros(n).reshape(n, 1),
             np.arange(n + 1)[1:].reshape(n, 1)
         ), axis=1)
 
         patches = []
         for i in range(n):
             # Add a rectangle
-            rect = mpatches.Rectangle(grid[i] - [0.01, 0.01], s, s, ec='none')
+            rect = mpatches.Rectangle(grid[i] - [0, s*0.15], s, s, ec='none')
             patches.append(rect)
-            self.__label__(grid[i], self.labels[1], patch_size)
+            self.__label__(grid[i], self.labels[i])
 
-        colors = np.linspace(0, 1, len(patches))
-        collection = PatchCollection(patches, cmap=plt.cm.hsv, alpha=alpha)
+        collection = PatchCollection(patches, alpha=alpha)
+
+        # Space the patches and the text labels
+        collection.set_offsets(np.array([[-(patch_size) * self.dpi * 0.75, 0]]))
+
         collection.set_facecolors(self.colors)
-        self.ax.add_collection(collection)
+        #collection.set_edgecolor('#ffffff') # Draw color for box outlines
 
-        plt.subplots_adjust(left=0, right=1, bottom=0, top=1)
+        self.axis.add_collection(collection)
+
         plt.axis('equal')
         plt.axis('off')
-
-        plt.savefig(self.filename)
+        plt.savefig(self.filename, facecolor='#000000', dpi=self.dpi,
+            pad_inches=0, bbox_inches='tight')
 
 
 class KMLView:
@@ -195,7 +204,9 @@ if __name__ == '__main__':
     from fluxpy.mediators import *
     from fluxpy.models import *
     kml = KMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
-    kml.static_3d_grid_view({}, '/home/kaendsle/Desktop/')
+    legend = Legend(kml.colors.get('BrBG11').legend_entries(), 'BrBG11')
+    #kml.static_3d_grid_view({}, '/home/kaendsle/Desktop/')
+    legend.render()
 
 
 
