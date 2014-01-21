@@ -35,6 +35,7 @@ class Legend:
         self.labels = self.labels[::-1]
         self.colors = self.colors[::-1]
 
+        # Supress warnings about these axes and the tight layout
         warnings.filterwarnings('ignore', r'.*tight_layout.*',
             UserWarning, r'.*figure.*')
 
@@ -79,6 +80,8 @@ class Legend:
         plt.savefig(self.file_path, facecolor='#000000', dpi=self.dpi,
             pad_inches=0, bbox_inches='tight')
 
+        return self.file_path
+
 
 class KMLView:
     '''
@@ -97,13 +100,35 @@ class KMLView:
         self.field_units = dict(zip(model.defaults.get('columns'),
             model.defaults.get('units')))
 
-    def __legend__(self, style, path, x_offset=0.2):
+    def __legend__(self, style, path, x_offset=0.3):
         return KML.ScreenOverlay(
+            KML.name('Legend'),
             KML.overlayXY(x=str(x_offset), y='1', xunits='fraction', yunits='fraction'),
             KML.screenXY(x='0', y='1', xunits='fraction', yunits='fraction'),
             KML.rotationXY(x='0', y='0', xunits='fraction', yunits='fraction'),
             KML.Icon(KML.href(path)),
             KML.size(x='248', y='469', xunits='pixels', yunits='pixels'))
+
+    def __legend_vertical__(self, levels=5, origin=(0, 0), unit_height=100000):
+        # Generate a vertical legend for error
+        elements = []
+        z = 1
+        while z <= levels:
+            # Assumes that 1 unit height is the mean error
+            elements.append(KML.Placemark(
+                KML.name('+%d z Score' % (z - 1) if z > 1 else 'Mean Error'),
+                KML.Style(
+                    KML.IconStyle(
+                        KML.Icon(
+                            KML.href('http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png')))),
+                KML.Point(
+                    KML.extrude(1),
+                    KML.altitudeMode('absolute'),
+                    KML.coordinates(('%d,%d,' % (origin[0] + z,
+                        origin[1])) + str(z * unit_height)))))
+            z += 1
+
+        return elements
 
     def __score_style__(self, score, style):
         # Calculates the style ID of the color to use
@@ -167,19 +192,18 @@ class KMLView:
         else:
             desc_tpl = desc_tpl % ('{%s}' % keys[0])
 
+        # Generate a legend graphic and get the <ScreenOverlay> element for such a graphic
+        legend = Legend(self.colors.get('BrBG11').legend_entries(), output_path, 'BrBG11')
+        legend_overlay = self.__legend__('BrBG11', legend.file_path)
+
         # Iterate through the returned DataFrames
         i = 0
         while i < len(dfs):
-            placemarks = []
+            placemarks = [] # Initial container
 
             # Calculate z scores for the values
             dfs[i]['z%s' % keys[0]] = self.__scores__(dfs[i][keys[0]]).apply(math.ceil)
             dfs[i]['z%s' % keys[1]] = self.__scores__(dfs[i][keys[1]]).apply(lambda x: math.ceil(x) + 1 if x > 0 else 1)
-
-            # Generate a legend graphic and get the <ScreenOverlay> element for such a graphic
-            legend = Legend(self.colors.get('BrBG11').legend_entries(), output_path, 'BrBG11')
-            legend.render()
-            legend_overlay = self.__legend__('BrBG11', legend.file_path)
 
             # Iterate through the rows of the Data Frame
             for j, series in dfs[i].iterrows():
@@ -198,11 +222,13 @@ class KMLView:
 
             preamble = list(self.colors.get('BrBG11').kml_styles(outlines=False,
                 alpha=self.alpha))
-            preamble.extend([
-                KML.name(self.collection_name),
-                legend_overlay, # The <ScreenOverlay> element
-                KML.Folder(KML.name(self.collection_name), *placemarks)
-            ])
+
+            preamble.append(KML.name(self.collection_name))
+
+            # Add the legends and the <Folder> element with <Placemarks>
+            preamble.extend(self.__legend_vertical__())
+            preamble.extend((legend_overlay,
+                KML.Folder(KML.name(self.collection_name), *placemarks)))
 
             doc = KML.Document(*preamble)
 
@@ -210,6 +236,8 @@ class KMLView:
                 stream.write(etree.tostring(doc))
 
             i += 1
+
+        return (output_path, legend.render())
 
 
 if __name__ == '__main__':
