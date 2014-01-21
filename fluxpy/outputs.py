@@ -15,7 +15,7 @@ from pykml.factory import KML_ElementMaker as KML
 from lxml import etree
 from shapely.geometry import Point
 from fluxpy import DB, DEFAULT_PATH, RESERVED_COLLECTION_NAMES
-from fluxpy.colors import *
+from fluxpy.colors import COLORS, DivergingColors
 
 class Legend:
     '''
@@ -92,7 +92,8 @@ class KMLView:
     alpha = 1.0
     filename_pattern = '%s_%d.kml' # Must have %s and %d format strings in name
     colors = {
-        'BrBG11': DivergingColors('brbg11')
+        'BrBG11': DivergingColors('BrBG11'),
+        'RdBu3': DivergingColors('RdBu3', COLORS.get('RdBu3'))
     }
 
     def __init__(self, mediator, model, collection_name):
@@ -111,12 +112,12 @@ class KMLView:
             KML.Icon(KML.href(path)),
             KML.size(x='248', y='469', xunits='pixels', yunits='pixels'))
 
-    def __legend_vertical__(self, levels=5, origin=(0, 0), unit_height=100000):
+    def __legend_vertical__(self, levels=5, origin=(0, 0), vscale=100000):
         # Generate a vertical legend for error
         elements = []
         z = 1
         while z <= levels:
-            # Assumes that 1 unit height is the mean error
+            # Assumes that 1 unit height (vscale) is the mean error
             elements.append(KML.Placemark(
                 KML.name('+%d z Score' % (z - 1) if z > 1 else 'Mean Error'),
                 KML.Style(
@@ -127,17 +128,24 @@ class KMLView:
                     KML.extrude(1),
                     KML.altitudeMode('absolute'),
                     KML.coordinates(('%d,%d,' % (origin[0] + z,
-                        origin[1])) + str(z * unit_height)))))
+                        origin[1])) + str(z * vscale)))))
             z += 1
 
         return elements
 
-    def __score_style__(self, score, style):
+    def __score_style__(self, score, color):
+        num_score_classes = self.colors.get(color).score_length
+
         # Calculates the style ID of the color to use
         if score >= 0:
-            style = '%s+' % style
+            color = '%s+' % color
 
-        return ('#%s%d' % (style, score)).lower()
+        # If the number of standard deviations is outside the number of classes
+        #   provided, clamp the style to the highest (or lowest) class
+        if num_score_classes <= abs(score):
+            score = (score * num_score_classes) / abs(score)
+
+        return ('#%s%d' % (color, score)).lower()
 
     def __scores__(self, series):
         # Calculates z scores for a given series
@@ -167,7 +175,8 @@ class KMLView:
     def __query__(self, query_object):
         return self.mediator.load_from_db(self.collection_name, query_object)
 
-    def static_3d_grid_view(self, query, output_path, keys=('values', 'errors')):
+    def static_3d_grid_view(self, query, output_path, keys=('values', 'errors'),
+            color='BrBG11', vscale=100000):
         '''
         Generates a static (no time component) KML view of gridded, 3D data 
         using up to two fields, given by the dictionary keys, in the connected 
@@ -195,7 +204,7 @@ class KMLView:
             desc_tpl = desc_tpl % ('{%s}' % keys[0])
 
         # Generate a legend graphic and get the <ScreenOverlay> element for such a graphic
-        legend = Legend(self.colors.get('BrBG11').legend_entries(), output_path, 'BrBG11')
+        legend = Legend(self.colors.get(color).legend_entries(), output_path, color)
 
         # Iterate through the returned DataFrames
         i = 0
@@ -211,12 +220,12 @@ class KMLView:
 
             # Iterate through the rows of the Data Frame
             for j, series in df.iterrows():
-                altitude = (series['z%s' % keys[1]] * 100000) 
+                altitude = (series['z%s' % keys[1]] * vscale) 
                 coords = self.__square_bounds__((series['x'], series['y']), altitude)
 
                 placemarks.append(KML.Placemark(
                     KML.description(desc_tpl.format(**dict(series))),
-                    KML.styleUrl(self.__score_style__(series['z%s' % keys[0]], 'BrBG11')),
+                    KML.styleUrl(self.__score_style__(series['z%s' % keys[0]], color)),
                     KML.Polygon(
                         KML.extrude(1),
                         KML.altitudeMode('absolute'),
@@ -224,14 +233,14 @@ class KMLView:
                             KML.LinearRing(
                                 KML.coordinates(*coords))))))
 
-            preamble = list(self.colors.get('BrBG11').kml_styles(outlines=False,
+            preamble = list(self.colors.get(color).kml_styles(outlines=False,
                 alpha=self.alpha))
 
             preamble.append(KML.name(self.collection_name))
 
             # Add the legends and the <Folder> element with <Placemarks>
-            preamble.extend(self.__legend_vertical__())
-            preamble.extend((self.__legend__('BrBG11', legend.file_path),
+            preamble.extend(self.__legend_vertical__(vscale=vscale))
+            preamble.extend((self.__legend__(color, legend.file_path),
                 KML.Folder(KML.name(ident), *placemarks)))
 
             doc = KML.Document(*preamble)
@@ -274,11 +283,13 @@ class KMZView:
 if __name__ == '__main__':
     from fluxpy.mediators import *
     from fluxpy.models import *
-    the_path = '/home/kaendsle/Desktop/'
-    kml = KMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
-    files = kml.static_3d_grid_view({}, the_path)
-    kmz = KMZView(the_path, files)
-    kmz.render()
+    output_path = '/home/kaendsle/Desktop/'
+    #kml = KMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
+    legend = Legend(DivergingColors('RdBu3', COLORS.get('RdBu3')).legend_entries(), output_path, 'RdBu3')
+    legend.render()
+    #files = kml.static_3d_grid_view({}, output_path, color='RdBu3')
+    #kmz = KMZView(output_path, files)
+    #kmz.render()
 
 
 

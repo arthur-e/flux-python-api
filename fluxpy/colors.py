@@ -6,9 +6,14 @@ tools for transforming RGB color value arrays into KML styles.
 import math
 from pykml.factory import KML_ElementMaker as KML
 
-class AbstractColors:
+COLORS = { # Cynthia Brewer's color scales (colorbrewer2.org)
+    'BrBG11': ['rgb(84,48,5)','rgb(140,81,10)','rgb(191,129,45)','rgb(223,194,125)','rgb(246,232,195)','rgb(245,245,245)','rgb(199,234,229)','rgb(128,205,193)','rgb(53,151,143)','rgb(1,102,94)','rgb(0,60,48)'],
+    'RdBu3': ['rgb(239,138,98)','rgb(247,247,247)','rgb(103,169,207)']
+}
+
+class AbstractColors(object):
     def __init__(self, name, base=None):
-        self.name = name
+        self.name = name.lower()
         
         if base is not None:
             if isinstance(base, str):
@@ -47,28 +52,22 @@ class DivergingColors(AbstractColors):
     is because Cynthia Brewer's color scales are typically ordered "warm" to
     "cool" colors. Assumes z-scores are used to map data to color segments.
     '''
-    base = [
-        'rgb(84,48,5)',
-        'rgb(140,81,10)',
-        'rgb(191,129,45)',
-        'rgb(223,194,125)',
-        'rgb(246,232,195)',
-        'rgb(245,245,245)',
-        'rgb(199,234,229)',
-        'rgb(128,205,193)',
-        'rgb(53,151,143)',
-        'rgb(1,102,94)',
-        'rgb(0,60,48)'
-    ]
+    base = COLORS.get('BrBG11')
+
+    def __init__(self, *args, **kwargs):
+        super(DivergingColors, self).__init__(*args, **kwargs)
+
+        # Set the score length, the number of classes about the mean supported
+        # Initialize the z-score counter (for diverging color scale, the number
+        #   of z-scores possible is the number of available classes minus 1
+        #   divided by half)
+        self.score_length = int(math.floor(len(self.base) * 0.5))
 
     def labels(self):
         '''Generate a list of text labels to use for the colors'''
         labels = []
 
-        # Initialize the z-score counter (for diverging color scale, the number
-        #   of z-scores possible is the number of available classes minus 1
-        #   divided by half)
-        i = int(math.floor(len(self.base) * 0.5))
+        i = self.score_length
         for color in self.base:
             if i > 0:
                 code = 'z Score: +%d' % i
@@ -89,10 +88,7 @@ class DivergingColors(AbstractColors):
         '''Generates PyKML <Style> instances for each color in the ramp'''
         styles = list()
 
-        # Initialize the z-score counter (for diverging color scale, the number
-        #   of z-scores possible is the number of available classes minus 1
-        #   divided by half)
-        i = int(math.floor(len(self.base) * 0.5))
+        i = self.score_length
         for color in self.kml_colors(alpha):
             if i >= 0:
                 code = '%s+%d'
