@@ -1,13 +1,15 @@
 '''
-For generating specific, derived outputs from spatio-temporal data.
+For generating specific, derived outputs from spatio-temporal data. If a class
+here has the render() method on one of its instances, the method is expected
+to return a string or sequence of strings where each string is a file system 
+path (either a directory or a file).
 '''
 
-import ipdb#FIXME
 import datetime, os, sys, re, math, warnings
-import matplotlib.pyplot as plt#; plt.rcdefaults()
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from zipfile import ZipFile, ZIP_DEFLATED
 from matplotlib.collections import PatchCollection
 from pykml.factory import KML_ElementMaker as KML
 from lxml import etree
@@ -240,11 +242,41 @@ class KMLView:
         return (output_path, legend.render())
 
 
+class KMZView:
+    '''
+    A Zipped KML view; a ZIP archive with KML files and dependencies (e.g.
+    image overlays, icons) inside.
+    '''
+    kml_matcher = re.compile(r'.+\.kml$')
+
+    def __init__(self, path, files):
+        self.path = path
+        self.filename = os.path.join(path, 'output.kmz')
+        self.files = files
+
+    def render(self, files=None):
+        if files is not None:
+            self.files = files
+
+        with ZipFile(self.filename, 'w', ZIP_DEFLATED) as archive:
+            for path in self.files:
+                if os.path.isdir(path):
+                    for filename in os.listdir(path):
+                        if self.kml_matcher.match(filename) is not None:
+                            archive.write(os.path.join(path, filename), filename)
+
+                else:
+                    archive.write(path, os.path.basename(path))
+
+
 if __name__ == '__main__':
     from fluxpy.mediators import *
     from fluxpy.models import *
+    the_path = '/home/kaendsle/Desktop/'
     kml = KMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
-    kml.static_3d_grid_view({}, '/home/kaendsle/Desktop/')
+    files = kml.static_3d_grid_view({}, the_path)
+    kmz = KMZView(the_path, files)
+    kmz.render()
 
 
 
