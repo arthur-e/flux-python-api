@@ -167,7 +167,7 @@ class KMLView:
     def __query__(self, query_object):
         return self.mediator.load_from_db(self.collection_name, query_object)
 
-    def static_3d_grid_view(self, query, output_path, keys=('value', 'error')):
+    def static_3d_grid_view(self, query, output_path, keys=('values', 'errors')):
         '''
         Generates a static (no time component) KML view of gridded, 3D data 
         using up to two fields, given by the dictionary keys, in the connected 

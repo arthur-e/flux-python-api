@@ -1,5 +1,11 @@
 '''
-e.g. /ws4/idata/fluxvis/casa_gfed_inversion_results/1.zerofull_casa_1pm_10twr/Month_Uncert1.mat
+Example data: /ws4/idata/fluxvis/casa_gfed_inversion_results/1.zerofull_casa_1pm_10twr/Month_Uncert1.mat
+
+from fluxpy.mediators import *
+from fluxpy.models import *
+mediator = Grid3DMediator()
+xco2 = KrigedXCO2Matrix('xco2_data.mat', timestamp='2009-06-15')
+mediator.add(xco2).save_to_db('my_xco2_data')
 '''
 
 import datetime, os, sys, re
@@ -87,8 +93,8 @@ class Grid3DMediator(Mediator):
         for record in cursor:
             # Create values and error Series; concatenate them as a DataFrame,
             #   then concatenate them with the coordinates DataFrame
-            values = pd.Series(record['values'], dtype='float64', name='value')
-            errors = pd.Series(record['errors'], dtype='float64', name='error')
+            values = pd.Series(record['values'], dtype='float64', name='values')
+            errors = pd.Series(record['errors'], dtype='float64', name='errors')
             df = pd.concat([
                 coords,
                 pd.concat([values, errors], axis=1)

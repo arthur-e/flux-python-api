@@ -3,7 +3,7 @@ Data models for various science model outputs, including models that map from
 flat files and hierarchical files (e.g. HDF5) to Python pandas Data Frames.
 '''
 
-import datetime, os, sys, re, json, math, ipdb #FIXME
+import datetime, os, sys, re, json, math
 import pandas as pd
 import numpy as np
 import scipy.io
@@ -19,16 +19,16 @@ class TransformationInterface:
     file may be provided as a *.json file with the same name as the data file.
     '''
     defaults = { #TODO Have these config parameters applied as attributes in subclasses?
-        'columns': None, # The column order
+        'columns': [], # The column order
         'geometry': { # Only applies for non-structured data
             # True to specify that each document is a FeatureCollection; if False,
             #   each row will be stored as a separate document (a separate simple feature)
             'isCollection': False,
             'type': 'Point' # The WKT type to make for each row
         },
-        'header': None, # The human-readable column headers, in order
+        'header': [], # The human-readable column headers, in order
         'interval': None, # The time interval (ms) between observations (documents)
-        'parameters': None, # The names of those data fields other than space and time fields
+        'parameters': [], # The names of those data fields other than space and time fields
         'range': None, # The amount of time (ms) for which the measurements are valid after the timestamp
         'resolution': { # Mutually exclusive with the "geometry" key
             'units': 'degrees',
@@ -36,7 +36,7 @@ class TransformationInterface:
             'y_length': 0.5, # Grid cell resolution in the y direction
         },
         'transforms': [], # Lambda functions (as strings for eval()) to be applied to values per-field
-        'units': None, # The units of measurement, in order
+        'units': [], # The units of measurement, in order
         'var_name': None, # The Matlab/HDF5 variable of interst
     }
 
@@ -66,7 +66,7 @@ class XCO2Matrix(TransformationInterface):
     year, retrieval error (ppm).
     '''
     defaults = {
-        'columns': ('x', 'y', 'value', '%j', '%Y', 'error'),
+        'columns': ['x', 'y', 'value', '%j', '%Y', 'error'],
         'formats': {
             'x': '%.5f',
             'y': '%.5f',
@@ -77,10 +77,10 @@ class XCO2Matrix(TransformationInterface):
             'isCollection': False,
             'type': 'Point'
         },
-        'header': ('lng', 'lat', 'xco2_ppm', 'day', 'year', 'error_ppm'),
+        'header': ['lng', 'lat', 'xco2_ppm', 'day', 'year', 'error_ppm'],
         'interval': 86400000, # 1 day (daily) in ms
-        'parameters': ('value', 'error'),
-        'units': ('degrees', 'degrees', 'ppm', None, None, 'ppm^2'),
+        'parameters': ['value', 'error'],
+        'units': ['degrees', 'degrees', 'ppm', None, None, 'ppm^2'],
         'var_name': 'XCO2',
     }
 
@@ -161,16 +161,16 @@ class KrigedXCO2Matrix(XCO2Matrix):
     Columns: Longitude, latitude, XCO2 concentration (ppm), retrieval error (ppm)
     '''
     defaults = {
-        'columns': ['y', 'x', 'value', 'error', '4', '5', '6', '7', '8'],
+        'columns': ['y', 'x', 'values', 'errors', '4', '5', '6', '7', '8'],
         'formats': {
             'x': '%.5f',
             'y': '%.5f',
-            'value': '%.2f',
-            'error': '%.4f'
+            'values': '%.2f',
+            'errors': '%.4f'
         },
         'header': ['lat', 'lng', 'xco2_ppm', 'error_ppm^2', '', '', '', '', ''],
         'interval': None,
-        'parameters': ['value', 'error'],
+        'parameters': ['values', 'errors'],
         'range': 518400000, # 6 days
         'resolution': {
             'x_length': 0.5,
@@ -178,7 +178,7 @@ class KrigedXCO2Matrix(XCO2Matrix):
             'units': 'degrees'
         },
         'transforms': {
-            'error': lambda x: math.sqrt(x)
+            'errors': lambda x: math.sqrt(x)
         },
         'units': ['degrees', 'degrees', 'ppm', 'ppm^2', None, None, None, None, None],
         'var_name': 'krigedData',
