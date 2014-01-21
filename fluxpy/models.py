@@ -3,7 +3,7 @@ Data models for various science model outputs, including models that map from
 flat files and hierarchical files (e.g. HDF5) to Python pandas Data Frames.
 '''
 
-import datetime, os, sys, re, json, csv
+import datetime, os, sys, re, json, math, ipdb #FIXME
 import pandas as pd
 import numpy as np
 import scipy.io
@@ -19,24 +19,25 @@ class TransformationInterface:
     file may be provided as a *.json file with the same name as the data file.
     '''
     defaults = { #TODO Have these config parameters applied as attributes in subclasses?
-        'var_name': None, # The Matlab/HDF5 variable of interst
-        'interval': None, # The time interval (ms) between observations (documents)
-        'range': None, # The amount of time (ms) for which the measurements are valid after the timestamp
         'columns': None, # The column order
-        'header': None, # The human-readable column headers, in order
-        'units': None, # The units of measurement, in order
-        'parameters': None, # The names of those data fields other than space and time fields
         'geometry': { # Only applies for non-structured data
             # True to specify that each document is a FeatureCollection; if False,
             #   each row will be stored as a separate document (a separate simple feature)
             'isCollection': False,
             'type': 'Point' # The WKT type to make for each row
         },
+        'header': None, # The human-readable column headers, in order
+        'interval': None, # The time interval (ms) between observations (documents)
+        'parameters': None, # The names of those data fields other than space and time fields
+        'range': None, # The amount of time (ms) for which the measurements are valid after the timestamp
         'resolution': { # Mutually exclusive with the "geometry" key
+            'units': 'degrees',
             'x_length': 0.5, # Grid cell resolution in the x direction
             'y_length': 0.5, # Grid cell resolution in the y direction
-            'units': 'degrees'
-        }
+        },
+        'transforms': [], # Lambda functions (as strings for eval()) to be applied to values per-field
+        'units': None, # The units of measurement, in order
+        'var_name': None, # The Matlab/HDF5 variable of interst
     }
 
     def __init__(self, path=None):
@@ -65,8 +66,6 @@ class XCO2Matrix(TransformationInterface):
     year, retrieval error (ppm).
     '''
     defaults = {
-        'var_name': 'XCO2',
-        'interval': 86400000, # 1 day (daily) in ms
         'columns': ('x', 'y', 'value', '%j', '%Y', 'error'),
         'formats': {
             'x': '%.5f',
@@ -79,8 +78,10 @@ class XCO2Matrix(TransformationInterface):
             'type': 'Point'
         },
         'header': ('lng', 'lat', 'xco2_ppm', 'day', 'year', 'error_ppm'),
+        'interval': 86400000, # 1 day (daily) in ms
         'parameters': ('value', 'error'),
-        'units': ('degrees', 'degrees', 'ppm', None, None, 'ppm^2')
+        'units': ('degrees', 'degrees', 'ppm', None, None, 'ppm^2'),
+        'var_name': 'XCO2',
     }
 
     path_regex = re.compile(r'.+\.(?P<extension>mat|h5)')
@@ -160,24 +161,27 @@ class KrigedXCO2Matrix(XCO2Matrix):
     Columns: Longitude, latitude, XCO2 concentration (ppm), retrieval error (ppm)
     '''
     defaults = {
-        'var_name': 'krigedData',
-        'interval': None,
-        'range': 518400000, # 6 days
-        'columns': ('y', 'x', 'value', 'error', '4', '5', '6', '7', '8'),
+        'columns': ['y', 'x', 'value', 'error', '4', '5', '6', '7', '8'],
         'formats': {
             'x': '%.5f',
             'y': '%.5f',
             'value': '%.2f',
             'error': '%.4f'
         },
-        'header': ('lat', 'lng', 'xco2_ppm', 'error_ppm^2', '', '', '', '', ''),
-        'parameters': ('value', 'error'),
+        'header': ['lat', 'lng', 'xco2_ppm', 'error_ppm^2', '', '', '', '', ''],
+        'interval': None,
+        'parameters': ['value', 'error'],
+        'range': 518400000, # 6 days
         'resolution': {
             'x_length': 0.5,
             'y_length': 0.5,
             'units': 'degrees'
         },
-        'units': ('degrees', 'degrees', 'ppm', 'ppm^2', None, None, None, None, None)
+        'transforms': {
+            'error': lambda x: math.sqrt(x)
+        },
+        'units': ['degrees', 'degrees', 'ppm', 'ppm^2', None, None, None, None, None],
+        'var_name': 'krigedData',
     }
     
     def save(self, *args, **kwargs):
@@ -201,7 +205,12 @@ class KrigedXCO2Matrix(XCO2Matrix):
 
         except TypeError:
             raise ValueError('Could not get at the variable named "%s"' % self.config.get('var_name'))
-            
+
+        # Apply any data transforms
+        for col, transform in self.config.get('transforms').items():
+            if transform is not None:
+                df[col] = df[col].apply(transform)
+
         # Fix the precision of data values
         for col in self.config.get('formats').keys():
             df[col] = df[col].map(lambda x: float(self.config['formats'][col] % x))
