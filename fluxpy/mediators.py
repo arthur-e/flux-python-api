@@ -74,7 +74,6 @@ class Grid3DMediator(Mediator):
         
         # Retrieve a cursor to iterate over the records matching the query
         cursor = self.client[self.db_name][collection_name].find(query, {
-            '_id': 0,
             'values': 1,
             'errors': 1,
         })
@@ -89,6 +88,7 @@ class Grid3DMediator(Mediator):
         
         # Clear out any saved instances
         self.instances = []
+        ids = []
         
         for record in cursor:
             # Create values and error Series; concatenate them as a DataFrame,
@@ -101,8 +101,12 @@ class Grid3DMediator(Mediator):
             ], axis=1)
             
             self.instances.append(df)
+            ids.append(record.get('_id'))
+
+        # Convert the Python datetime instances to ISO 8601 timestamps
+        ids = map(lambda d: datetime.datetime.strftime(d, '%Y-%m-%dT%H:%M:%S'), ids)
             
-        return self.instances
+        return dict(zip(ids, self.instances))
             
     def save_to_db(self, collection_name):
         super(Grid3DMediator, self).save_to_db(collection_name)

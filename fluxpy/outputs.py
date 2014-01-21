@@ -5,7 +5,7 @@ to return a string or sequence of strings where each string is a file system
 path (either a directory or a file).
 '''
 
-import datetime, os, sys, re, math, warnings
+import datetime, os, sys, re, math, warnings, ipdb #FIXME
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -90,7 +90,7 @@ class KMLView:
     Writes out KML files from spatio-temporal data provided by a Mediator.
     '''
     alpha = 1.0
-    filename_pattern = 'output%d.kml' # Must have %d format string in name
+    filename_pattern = '%s_%d.kml' # Must have %s and %d format strings in name
     colors = {
         'BrBG11': DivergingColors('brbg11')
     }
@@ -196,19 +196,21 @@ class KMLView:
 
         # Generate a legend graphic and get the <ScreenOverlay> element for such a graphic
         legend = Legend(self.colors.get('BrBG11').legend_entries(), output_path, 'BrBG11')
-        legend_overlay = self.__legend__('BrBG11', legend.file_path)
 
         # Iterate through the returned DataFrames
         i = 0
-        while i < len(dfs):
+        while i < len(dfs.items()):
             placemarks = [] # Initial container
 
+            # Parse out the identifier and the DataFrame
+            ident, df = dfs.items()[i]
+
             # Calculate z scores for the values
-            dfs[i]['z%s' % keys[0]] = self.__scores__(dfs[i][keys[0]]).apply(math.ceil)
-            dfs[i]['z%s' % keys[1]] = self.__scores__(dfs[i][keys[1]]).apply(lambda x: math.ceil(x) + 1 if x > 0 else 1)
+            df['z%s' % keys[0]] = self.__scores__(df[keys[0]]).apply(math.ceil)
+            df['z%s' % keys[1]] = self.__scores__(df[keys[1]]).apply(lambda x: math.ceil(x) + 1 if x > 0 else 1)
 
             # Iterate through the rows of the Data Frame
-            for j, series in dfs[i].iterrows():
+            for j, series in df.iterrows():
                 altitude = (series['z%s' % keys[1]] * 100000) 
                 coords = self.__square_bounds__((series['x'], series['y']), altitude)
 
@@ -229,12 +231,12 @@ class KMLView:
 
             # Add the legends and the <Folder> element with <Placemarks>
             preamble.extend(self.__legend_vertical__())
-            preamble.extend((legend_overlay,
-                KML.Folder(KML.name(self.collection_name), *placemarks)))
+            preamble.extend((self.__legend__('BrBG11', legend.file_path),
+                KML.Folder(KML.name(ident), *placemarks)))
 
             doc = KML.Document(*preamble)
 
-            with open(os.path.join(output_path, self.filename_pattern % i), 'wb') as stream:
+            with open(os.path.join(output_path, self.filename_pattern % (ident, i)), 'wb') as stream:
                 stream.write(etree.tostring(doc))
 
             i += 1
