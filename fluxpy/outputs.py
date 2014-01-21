@@ -3,7 +3,7 @@ For generating specific, derived outputs from spatio-temporal data.
 '''
 
 import ipdb#FIXME
-import datetime, os, sys, re, math
+import datetime, os, sys, re, math, warnings
 import matplotlib.pyplot as plt#; plt.rcdefaults()
 import numpy as np
 import matplotlib.pyplot as plt
@@ -21,16 +21,22 @@ class Legend:
     are drawn as square cells in a vertical list.
     '''
 
-    def __init__(self, entries, scale_name=None):
+    def __init__(self, entries, path='.', scale_name='legend'):
         # Unzip a sequence of (color, label) tuples
         self.colors, self.labels = zip(*entries)
         self.dpi = 92
         self.figure, self.axis = plt.subplots()
-        self.filename = '%s.png' % (scale_name or 'legend')
-
-        self.axis.set_axis_off()
-        self.figure.set_tight_layout(True)
+        self.file_path = os.path.join(path, '%s.png' % scale_name)
+        self.figure.set_tight_layout(False)
         self.figure.set_size_inches(3, 6)
+
+        # Reverse the labels and color order; the drawing process is backwards
+        #   from intuition
+        self.labels = self.labels[::-1]
+        self.colors = self.colors[::-1]
+
+        warnings.filterwarnings('ignore', r'.*tight_layout.*',
+            UserWarning, r'.*figure.*')
 
     def __label__(self, xy, text):
         # Calls a text label on the plot
@@ -45,13 +51,16 @@ class Legend:
         # Create grid to plot the artists
         grid = np.concatenate((
             np.zeros(n).reshape(n, 1),
-            np.arange(n + 1)[1:].reshape(n, 1)
+            np.arange(-n, 1)[1:].reshape(n, 1)
         ), axis=1)
+
+        plt.text(-s, 1.1, 'Legend', family='sans-serif', size=14, weight='bold',
+            color='#ffffff')
 
         patches = []
         for i in range(n):
             # Add a rectangle
-            rect = mpatches.Rectangle(grid[i] - [0, s*0.15], s, s, ec='none')
+            rect = mpatches.Rectangle(grid[i] - [0, 0], s, s, ec='none')
             patches.append(rect)
             self.__label__(grid[i], self.labels[i])
 
@@ -67,7 +76,7 @@ class Legend:
 
         plt.axis('equal')
         plt.axis('off')
-        plt.savefig(self.filename, facecolor='#000000', dpi=self.dpi,
+        plt.savefig(self.file_path, facecolor='#000000', dpi=self.dpi,
             pad_inches=0, bbox_inches='tight')
 
 
@@ -88,11 +97,13 @@ class KMLView:
         self.field_units = dict(zip(model.defaults.get('columns'),
             model.defaults.get('units')))
 
-    def __legend__(self, style, path):
+    def __legend__(self, style, path, x_offset=0.2):
         return KML.ScreenOverlay(
-            KML.overlayXY(x='0.0', y='0.0', xunits='fraction', yunits='fraction'),
-            KML.screenXY(x='0.05', y='0.05', xunits='fraction', yunits='fraction'),
-            KML.icon(KML.href(path)))
+            KML.overlayXY(x=str(x_offset), y='1', xunits='fraction', yunits='fraction'),
+            KML.screenXY(x='0', y='1', xunits='fraction', yunits='fraction'),
+            KML.rotationXY(x='0', y='0', xunits='fraction', yunits='fraction'),
+            KML.Icon(KML.href(path)),
+            KML.size(x='248', y='469', xunits='pixels', yunits='pixels'))
 
     def __score_style__(self, score, style):
         # Calculates the style ID of the color to use
@@ -166,8 +177,9 @@ class KMLView:
             dfs[i]['z%s' % keys[1]] = self.__scores__(dfs[i][keys[1]]).apply(lambda x: math.ceil(x) + 1 if x > 0 else 1)
 
             # Generate a legend graphic and get the <ScreenOverlay> element for such a graphic
-            legend = Legend(self.colors.get(style).legend_entries(), 'BrBG11')
-            legend_overlay = self.__legend__('BrBG11', legend.filename) #TODO
+            legend = Legend(self.colors.get('BrBG11').legend_entries(), output_path, 'BrBG11')
+            legend.render()
+            legend_overlay = self.__legend__('BrBG11', legend.file_path)
 
             # Iterate through the rows of the Data Frame
             for j, series in dfs[i].iterrows():
@@ -204,9 +216,7 @@ if __name__ == '__main__':
     from fluxpy.mediators import *
     from fluxpy.models import *
     kml = KMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
-    legend = Legend(kml.colors.get('BrBG11').legend_entries(), 'BrBG11')
-    #kml.static_3d_grid_view({}, '/home/kaendsle/Desktop/')
-    legend.render()
+    kml.static_3d_grid_view({}, '/home/kaendsle/Desktop/')
 
 
 
