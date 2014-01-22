@@ -18,7 +18,7 @@ class Mediator(object):
     '''
     A generic model for transforming data between foreign formats and the
     persistence layer of choice (MongoDB in this application). Mediator calls
-    the save() method on subclasses of the TransformationInterface (those
+    the extract() method on subclasses of the TransformationInterface (those
     classes that interpret foreign formats).
     '''
 
@@ -28,7 +28,7 @@ class Mediator(object):
         self.instances = [] # Stored model instances
         
     def add(self, *args, **kwargs):
-        '''Add model instances; set optional parameter overrides for all instances added'''
+        '''Add model instances; set optional configuration overrides for all instances added'''
         for each in args:
             for key, value in kwargs.items():
                 each.config[key] = value
@@ -85,11 +85,10 @@ class Grid3DMediator(Mediator):
         
         # Create a DataFrame of longitude-latitude coordinates
         coords = pd.DataFrame(coords, columns=('x', 'y'))
-        
-        # Clear out any saved instances
-        self.instances = []
+
+        frames = []
         ids = []
-        
+
         for record in cursor:
             # Create values and error Series; concatenate them as a DataFrame,
             #   then concatenate them with the coordinates DataFrame
@@ -100,19 +99,19 @@ class Grid3DMediator(Mediator):
                 pd.concat([values, errors], axis=1)
             ], axis=1)
             
-            self.instances.append(df)
+            frames.append(df)
             ids.append(record.get('_id'))
 
         # Convert the Python datetime instances to ISO 8601 timestamps
         ids = map(lambda d: datetime.datetime.strftime(d, '%Y-%m-%dT%H:%M:%S'), ids)
-            
-        return dict(zip(ids, self.instances))
-            
+
+        return dict(zip(ids, frames))
+
     def save_to_db(self, collection_name):
         super(Grid3DMediator, self).save_to_db(collection_name)
 
         for inst in self.instances:
-            df = inst.save()
+            df = inst.extract()
 
             # Expect that a valid timestamp was provided
             timestamp = inst.config.get('timestamp')
@@ -138,6 +137,9 @@ class Grid3DMediator(Mediator):
                 data_dict[param] = df[param].tolist()
                 
             j = self.client[self.db_name][collection_name].insert(data_dict)
+
+        # Clear out any saved instances
+        self.instances = []
 
     def summarize(self, model, collection_name, query={}):
         dfs = self.load_from_db(collection_name, query)
@@ -173,7 +175,7 @@ class Unstructured3DMediator(Mediator):
         super(Unstructured3DMediator, self).save_to_db(collection_name)
 
         for inst in self.instances:
-            df = inst.save()
+            df = inst.extract()
             
             features = []
             for i, series in df.iterrows():

@@ -12,8 +12,8 @@ import h5py
 class TransformationInterface:
     '''
     An abstract persistence transformation interface (modified from
-    Andy Bulka, 2001), where save() and dump() methods are defined in
-    subclasses. The save() method may take unique arguments as optional keyword
+    Andy Bulka, 2001), where extract() and dump() methods are defined in
+    subclasses. The extract() method may take unique arguments as optional keyword
     arguments (they must default to None). The dump() method must take only one
     argument which is the interchange datum (a dictionary). A configuration
     file may be provided as a *.json file with the same name as the data file.
@@ -53,7 +53,7 @@ class TransformationInterface:
     def dump(self, data):
         pass
 
-    def save(self, *args, **kwargs):
+    def extract(self, *args, **kwargs):
         pass
 
 
@@ -115,10 +115,10 @@ class XCO2Matrix(TransformationInterface):
     def dump(self, data):
         pass
 
-    def save(self, *args, **kwargs):
+    def extract(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
 
-        # Allow overrides through optional keyword arguments in save()
+        # Allow overrides through optional keyword arguments in extract()
         kwargs.setdefault('var_name', self.config.get('var_name'))
         self.config.update(kwargs)
         
@@ -184,10 +184,10 @@ class KrigedXCO2Matrix(XCO2Matrix):
         'var_name': 'krigedData',
     }
     
-    def save(self, *args, **kwargs):
+    def extract(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
 
-        # Allow overrides through optional keyword arguments in save()
+        # Allow overrides through optional keyword arguments in extract()
         kwargs.setdefault('var_name', self.config.get('var_name'))
         kwargs.setdefault('timestamp', self.config.get('timestamp'))
         self.config.update(kwargs)

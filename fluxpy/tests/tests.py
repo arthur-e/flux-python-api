@@ -29,11 +29,11 @@ class TestXCO2Data(unittest.TestCase):
         xco2 = XCO2Matrix(os.path.join(self.path, 'xco2.mat'),
             timestamp='2009-06-15')
 
-        df1 = xco2.save()
+        df1 = xco2.extract()
         self.assertEqual(df1.shape, (1311, 7))
 
-        # Should allow overrides in the save() method
-        df2 = xco2.save(timestamp='2010-01-01')
+        # Should allow overrides in the extract() method
+        df2 = xco2.extract(timestamp='2010-01-01')
         self.assertEqual(xco2.config.get('timestamp'), '2010-01-01')
             
     def test_save_to_db(self):
@@ -71,11 +71,11 @@ class TestKrigedXCO2Data(unittest.TestCase):
         xco2 = KrigedXCO2Matrix(os.path.join(self.path, 'kriged_xco2.mat'),
             timestamp='2009-06-15')
 
-        df1 = xco2.save()
+        df1 = xco2.extract()
         self.assertEqual(df1.shape, (14210, 9))
 
-        # Should allow overrides in the save() method
-        df2 = xco2.save(timestamp='2010-01-01')
+        # Should allow overrides in the extract() method
+        df2 = xco2.extract(timestamp='2010-01-01')
         self.assertEqual(xco2.config.get('timestamp'), '2010-01-01')
             
     def test_save_to_db(self):
