@@ -30,6 +30,26 @@ class AbstractGridView:
         self.field_units = dict(zip(model.defaults.get('columns'),
             model.defaults.get('units')))
 
+    def __description__(self, keys):
+        # Remove plurals
+        field_names = map(lambda s: s.rstrip('s'), keys)
+
+        # KML Placemark description template
+        desc_tpl = '<h3>{{x}}, {{y}}</h3><h4>{k1}: %s {u1}<h4>'.format(x='{x}',
+                y='{y}', k1=field_names[0], u1=self.field_units[keys[0]])
+
+        # Sets up a new format string with field names and units e.g. "Value: {value} ppm"
+        if len(keys) > 1:
+            desc_tpl += '<h4>{k2}: %s {u2}<h4>'.format(k2=field_names[1],
+                u2=self.field_units[keys[1]])
+
+            desc_tpl = desc_tpl % ('{%s}' % keys[0], '{%s}' % keys[1])
+
+        else:
+            desc_tpl = desc_tpl % ('{%s}' % keys[0])
+
+        return desc_tpl
+
     def __square_bounds__(self, coords, altitude=None):
         # For this gridded product, assume square cells; get grid cell resolution
         gridres = self.model.defaults.get('resolution').get('x_length')
@@ -58,7 +78,7 @@ class AbstractScoreView(AbstractGridView):
     An abstract class of outputs based on standard scores (z scores).
     '''
 
-    def __labels__(self, sigmas, clamped=False):
+    def __score_labels__(self, sigmas, clamped=False):
         '''Create legend labels for standard scores (z scores)'''
         labels = []
 
@@ -103,7 +123,7 @@ class AbstractScoreView(AbstractGridView):
         return series.apply(lambda x: x - mean).apply(lambda x: x * (1/std))
 
 
-class KMLView(AbstractScoreView):
+class ScoredKMLView(AbstractScoreView):
     '''
     Writes out KML files from spatio-temporal data provided by a Mediator.
     '''
@@ -121,7 +141,7 @@ class KMLView(AbstractScoreView):
             KML.overlayXY(x=str(x_fraction), y=str(y_fraction), xunits='fraction', yunits='fraction'),
             KML.screenXY(x='0', y='1', xunits='fraction', yunits='fraction'),
             KML.rotationXY(x='0', y='0', xunits='fraction', yunits='fraction'),
-            KML.Icon(KML.href(path)),
+            KML.Icon(KML.href(os.path.basename(path))),
             KML.size(x=dim[0], y=dim[1], xunits='pixels', yunits='pixels'))
 
     def __legend_vertical__(self, levels=5, origin=(0, 0), vscale=100000):
@@ -145,62 +165,55 @@ class KMLView(AbstractScoreView):
 
         return elements
 
-    def static_3d_grid_view(self, query, output_path, keys=('values', 'errors'),
-            color='BrBG11', vscale=100000):
+    def render(self, query, output_path, keys=('values', 'errors'),
+            color='dBrBG11', vscale=100000):
         '''
-        Generates a static (no time component) KML view of gridded, 3D data 
+        Generates a KML view of gridded, 3D data with standard scores (z scores)
         using up to two fields, given by the dictionary keys, in the connected 
         data e.g. the first field will be used to encode color and the second
         field to encode the KML Polygon extrusion height. Assumes that each grid
         cell has a single longitude-latitude pair describing its centroid.
         '''
-        dfs = self.__query__(query)
         file_paths = [] # Remember all files that may need to be bundled in KMZ
         scale = self.colors.get(color)
 
         if not os.path.exists(output_path):
             raise ValueError('The specified output_path does not exist or cannot be read')
 
-        # KML Placemark description template
-        desc_tpl = '<h3>{{x}}, {{y}}</h3><h4>{k1}: %s {u1}<h4>'.format(x='{x}',
-                y='{y}', k1=keys[0], u1=self.field_units[keys[0]])
+        # Get field names
+        f1, f2 = map(lambda x: 'z%s' % x, keys)
 
-        # Sets up a new format string with field names and units e.g. "Value: {value} ppm"
-        if len(keys) > 1:
-            desc_tpl += '<h4>{k2}: %s {u2}<h4>'.format(k2=keys[1],
-                u2=self.field_units[keys[1]])
+        # Get the <description> element template
+        desc_tpl = self.__description__(keys)
 
-            desc_tpl = desc_tpl % ('{%s}' % keys[0], '{%s}' % keys[1])
-
-        else:
-            desc_tpl = desc_tpl % ('{%s}' % keys[0])
-
-        i = 0 # Iterate through the returned DataFrames
+        # Execute the query
+        dfs = self.__query__(query)
 
         # Parse out the identifier and the DataFrame
+        i = 0 # Iterate through the returned DataFrames
         for ident, df in dfs.items():
             placemarks = [] # Initial container
 
             # Calculate z scores for the values
-            df['z%s' % keys[0]] = s1 = self.__scores__(df[keys[0]]).apply(math.ceil)
-            df['z%s' % keys[1]] = s2 = self.__scores__(df[keys[1]]).apply(lambda x: math.ceil(x) + 1 if x > 0 else 1)
+            df[f1] = s1 = self.__scores__(df[keys[0]]).apply(math.ceil)
+            df[f2] = s2 = self.__scores__(df[keys[1]]).apply(lambda x: math.ceil(x) + 1 if x > 0 else 1)
+
+            # Get z score labels
+            labels = self.__score_labels__(scale.score_length, len(s1.unique()) > len(scale))
 
             # Generate a legend graphic and get the <ScreenOverlay> element for such a graphic
-            legend = Legend(self.legend_size, zip(scale.hex_colors(),
-                self.__labels__(scale.score_length, len(s1.unique()) > len(scale))),
+            legend = Legend(self.legend_size, zip(scale.hex_colors(), labels),
                 output_path, color)
 
             # Iterate through the rows of the Data Frame
             for j, series in df.iterrows():
-                s1 = series['z%s' % keys[0]]
-                s2 = series['z%s' % keys[1]]
 
-                altitude = (s2 * vscale) 
-                coords = self.__square_bounds__((series['x'], series['y']), altitude)
+                coords = self.__square_bounds__((series['x'], series['y']),
+                    (series[f2] * vscale)) # Altitude
 
                 placemarks.append(KML.Placemark(
                     KML.description(desc_tpl.format(**dict(series))),
-                    KML.styleUrl(self.__score_style__(s1, color)),
+                    KML.styleUrl(self.__score_style__(series[f1], color)),
                     KML.Polygon(
                         KML.extrude(1),
                         KML.altitudeMode('absolute'),
@@ -234,9 +247,9 @@ class KMLView(AbstractScoreView):
         return file_paths
 
 
-class KMZView:
+class KMZWrapper:
     '''
-    A Zipped KML view; a ZIP archive with KML files and dependencies (e.g.
+    Generates a Zipped KML; a ZIP archive with KML files and dependencies (e.g.
     image overlays, icons) inside.
     '''
     kml_matcher = re.compile(r'.+\.kml$')
@@ -347,13 +360,13 @@ if __name__ == '__main__':
     from fluxpy.mediators import *
     from fluxpy.models import *
     output_path = '/home/kaendsle/Desktop/'
-    kml = KMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
-    files = kml.static_3d_grid_view({}, output_path, color='RdBu3')
-    kmz = KMZView(output_path, files)
+    kml = ScoredKMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
+    files = kml.render({}, output_path, color='dBrBG11')
+    kmz = KMZWrapper(output_path, files)
     kmz.render()
 
-    #legend = Legend((2, 5), DivergingColors('RdBu3', COLORS.get('RdBu3')).legend_entries(), output_path, 'RdBu3')
-    #legend = Legend((2, 5), DivergingColors('BrBG11').legend_entries(), output_path, 'BrBG11')
+    #legend = Legend((2, 5), DivergingColors('dRdBu3', COLORS.get('dRdBu3')).legend_entries(), output_path, 'dRdBu3')
+    #legend = Legend((2, 5), DivergingColors('dBrBG11').legend_entries(), output_path, 'dBrBG11')
     #legend.render()
 
 

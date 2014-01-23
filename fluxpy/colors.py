@@ -7,8 +7,8 @@ import math
 from pykml.factory import KML_ElementMaker as KML
 
 COLORS = { # Cynthia Brewer's color scales (colorbrewer2.org)
-    'BrBG11': ['rgb(84,48,5)','rgb(140,81,10)','rgb(191,129,45)','rgb(223,194,125)','rgb(246,232,195)','rgb(245,245,245)','rgb(199,234,229)','rgb(128,205,193)','rgb(53,151,143)','rgb(1,102,94)','rgb(0,60,48)'],
-    'RdBu3': ['rgb(239,138,98)','rgb(247,247,247)','rgb(103,169,207)']
+    'dBrBG11': ['rgb(84,48,5)','rgb(140,81,10)','rgb(191,129,45)','rgb(223,194,125)','rgb(246,232,195)','rgb(245,245,245)','rgb(199,234,229)','rgb(128,205,193)','rgb(53,151,143)','rgb(1,102,94)','rgb(0,60,48)'],
+    'dRdBu3': ['rgb(239,138,98)','rgb(247,247,247)','rgb(103,169,207)']
 }
 
 class AbstractColors(object):
@@ -58,7 +58,7 @@ class DivergingColors(AbstractColors):
     is because Cynthia Brewer's color scales are typically ordered "warm" to
     "cool" colors. Assumes z-scores are used to map data to color segments.
     '''
-    base = COLORS.get('BrBG11')
+    base = COLORS.get('dBrBG11')
 
     def __init__(self, *args, **kwargs):
         super(DivergingColors, self).__init__(*args, **kwargs)
