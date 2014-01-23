@@ -14,6 +14,9 @@ COLORS = { # Cynthia Brewer's color scales (colorbrewer2.org)
 class AbstractColors(object):
     def __init__(self, name, base=None):
         self.name = name.lower()
+
+        if COLORS.get(name) is not None:
+            self.base = COLORS.get(name)
         
         if base is not None:
             if isinstance(base, str):
@@ -22,6 +25,9 @@ class AbstractColors(object):
                     
             elif isinstance(base, list) or isinstance(base, tuple):
                 self.base = base
+
+    def __len__(self):
+        return len(self.base)
 
     def hex_colors(self):
         '''Generates hexadecimal color codes for each color in the ramp'''
@@ -61,7 +67,7 @@ class DivergingColors(AbstractColors):
         # Initialize the z-score counter (for diverging color scale, the number
         #   of z-scores possible is the number of available classes minus 1
         #   divided by half)
-        self.score_length = int(math.floor(len(self.base) * 0.5))
+        self.score_length = int(math.floor(len(self) * 0.5))
 
     def labels(self):
         '''Generate a list of text labels to use for the colors'''

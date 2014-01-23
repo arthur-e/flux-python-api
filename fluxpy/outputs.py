@@ -21,8 +21,14 @@ class AbstractGridView:
     '''
     An abstract class of gridded outputs.
     '''
-    def __init__(self):
-        pass
+    colors = dict([(n, DivergingColors(n)) for n in COLORS.keys()])
+
+    def __init__(self, mediator, model, collection_name):
+        self.mediator = mediator
+        self.model = model
+        self.collection_name = collection_name
+        self.field_units = dict(zip(model.defaults.get('columns'),
+            model.defaults.get('units')))
 
     def __square_bounds__(self, coords, altitude=None):
         # For this gridded product, assume square cells; get grid cell resolution
@@ -51,8 +57,30 @@ class AbstractScoreView(AbstractGridView):
     '''
     An abstract class of outputs based on standard scores (z scores).
     '''
-    def __init__(self):
-        pass
+
+    def __labels__(self, sigmas, clamped=False):
+        '''Create legend labels for standard scores (z scores)'''
+        labels = []
+
+        # e.g. create [-2, -1, 0, 1, 2] for sigmas=2
+        bins = range(-sigmas, 0)
+        bins.extend(range(0, (sigmas + 1)))
+
+        for value in reversed(bins):
+            if value > 0:
+                labels.append('z Score: +%d' % value)
+
+            elif value == 0:
+                labels.append('Mean')
+
+            else:
+                labels.append('z Score: %d' % value)
+
+        if clamped:
+            labels[0] = '</= %s' % labels[0]
+            labels[-1] = '>/= %s' % labels[-1]
+
+        return labels
 
     def __score_style__(self, score, color):
         num_score_classes = self.colors.get(color).score_length
@@ -81,46 +109,20 @@ class KMLView(AbstractScoreView):
     '''
     alpha = 1.0
     filename_pattern = '%s_%d.kml' # Must have %s and %d format strings in name
-    colors = {
-        'BrBG11': DivergingColors('BrBG11'),
-        'RdBu3': DivergingColors('RdBu3', COLORS.get('RdBu3'))
-    }
+    legend_size = (2.5, 5.0) # Size of the legend in inches
 
-    def __init__(self, mediator, model, collection_name):
-        self.mediator = mediator
-        self.model = model
-        self.collection_name = collection_name
-        self.field_units = dict(zip(model.defaults.get('columns'),
-            model.defaults.get('units')))
+    def __legend__(self, dimensions, style, path, x_fraction=0.1, y_fraction=0.95):
+        dim = map(str, dimensions)
 
-    def __labels__(self, values):
-        labels = []
-
-        i = self.score_length
-        for color in self.base:
-            if i > 0:
-                code = 'z Score: +%d' % i
-
-            elif i == 0:
-                code = 'Mean'
-
-            else:
-                code = 'z Score: %d' % i
-
-            labels.append(code)
-
-            i -= 1 # Counting down
-
-        return labels
-
-    def __legend__(self, style, path, x_offset=0.3):
+        # Note: KML does not use SVG, matplotlib drawing orientation; instead,
+        #   fractional position is measured from the bottom left corner
         return KML.ScreenOverlay(
             KML.name('Legend'),
-            KML.overlayXY(x=str(x_offset), y='1', xunits='fraction', yunits='fraction'),
+            KML.overlayXY(x=str(x_fraction), y=str(y_fraction), xunits='fraction', yunits='fraction'),
             KML.screenXY(x='0', y='1', xunits='fraction', yunits='fraction'),
             KML.rotationXY(x='0', y='0', xunits='fraction', yunits='fraction'),
             KML.Icon(KML.href(path)),
-            KML.size(x='248', y='469', xunits='pixels', yunits='pixels'))
+            KML.size(x=dim[0], y=dim[1], xunits='pixels', yunits='pixels'))
 
     def __legend_vertical__(self, levels=5, origin=(0, 0), vscale=100000):
         # Generate a vertical legend for error
@@ -153,6 +155,8 @@ class KMLView(AbstractScoreView):
         cell has a single longitude-latitude pair describing its centroid.
         '''
         dfs = self.__query__(query)
+        file_paths = [] # Remember all files that may need to be bundled in KMZ
+        scale = self.colors.get(color)
 
         if not os.path.exists(output_path):
             raise ValueError('The specified output_path does not exist or cannot be read')
@@ -171,29 +175,32 @@ class KMLView(AbstractScoreView):
         else:
             desc_tpl = desc_tpl % ('{%s}' % keys[0])
 
-        # Generate a legend graphic and get the <ScreenOverlay> element for such a graphic
-        legend = Legend(self.colors.get(color).legend_entries(), output_path, color)
+        i = 0 # Iterate through the returned DataFrames
 
-        # Iterate through the returned DataFrames
-        i = 0
-        while i < len(dfs.items()):
+        # Parse out the identifier and the DataFrame
+        for ident, df in dfs.items():
             placemarks = [] # Initial container
 
-            # Parse out the identifier and the DataFrame
-            ident, df = dfs.items()[i]
-
             # Calculate z scores for the values
-            df['z%s' % keys[0]] = self.__scores__(df[keys[0]]).apply(math.ceil)
-            df['z%s' % keys[1]] = self.__scores__(df[keys[1]]).apply(lambda x: math.ceil(x) + 1 if x > 0 else 1)
+            df['z%s' % keys[0]] = s1 = self.__scores__(df[keys[0]]).apply(math.ceil)
+            df['z%s' % keys[1]] = s2 = self.__scores__(df[keys[1]]).apply(lambda x: math.ceil(x) + 1 if x > 0 else 1)
+
+            # Generate a legend graphic and get the <ScreenOverlay> element for such a graphic
+            legend = Legend(self.legend_size, zip(scale.hex_colors(),
+                self.__labels__(scale.score_length, len(s1.unique()) > len(scale))),
+                output_path, color)
 
             # Iterate through the rows of the Data Frame
             for j, series in df.iterrows():
-                altitude = (series['z%s' % keys[1]] * vscale) 
+                s1 = series['z%s' % keys[0]]
+                s2 = series['z%s' % keys[1]]
+
+                altitude = (s2 * vscale) 
                 coords = self.__square_bounds__((series['x'], series['y']), altitude)
 
                 placemarks.append(KML.Placemark(
                     KML.description(desc_tpl.format(**dict(series))),
-                    KML.styleUrl(self.__score_style__(series['z%s' % keys[0]], color)),
+                    KML.styleUrl(self.__score_style__(s1, color)),
                     KML.Polygon(
                         KML.extrude(1),
                         KML.altitudeMode('absolute'),
@@ -201,24 +208,30 @@ class KMLView(AbstractScoreView):
                             KML.LinearRing(
                                 KML.coordinates(*coords))))))
 
-            preamble = list(self.colors.get(color).kml_styles(outlines=False,
-                alpha=self.alpha))
-
+            preamble = list(scale.kml_styles(outlines=False, alpha=self.alpha))
             preamble.append(KML.name(self.collection_name))
 
             # Add the legends and the <Folder> element with <Placemarks>
             preamble.extend(self.__legend_vertical__(vscale=vscale))
-            preamble.extend((self.__legend__(color, legend.file_path),
-                KML.Folder(KML.name(ident), *placemarks)))
+            preamble.extend([
+                # Calculate the legend image dimensions based on its size in inches and the DPI
+                self.__legend__(map(lambda x: x * legend.dpi, self.legend_size),
+                    color, legend.file_path),
+                KML.Folder(KML.name(ident), *placemarks)
+            ])
 
             doc = KML.Document(*preamble)
 
             with open(os.path.join(output_path, self.filename_pattern % (ident, i)), 'wb') as stream:
                 stream.write(etree.tostring(doc))
 
+            file_paths.append(legend.render())
+
             i += 1
 
-        return (output_path, legend.render())
+        file_paths.insert(0, output_path)
+
+        return file_paths
 
 
 class KMZView:
@@ -250,11 +263,11 @@ class KMZView:
 
 class Legend:
     '''
-    A legend for a classification scheme based on colored parcels. The entries
+    A legend for a classification scale based on colored parcels. The entries
     are drawn as square cells in a vertical list.
     '''
 
-    def __init__(self, entries, path='.', scale_name='legend'):
+    def __init__(self, size, entries, path='.', scale_name='legend'):
         self.bg_color = '#000000'
 
         # Pad the legend entries to keep them the right size
@@ -263,11 +276,13 @@ class Legend:
 
         # Unzip a sequence of (color, label) tuples
         self.colors, self.labels = zip(*entries)
-        self.dpi = 92
+        self.dpi = 92.0 # Should be float
+        self.width = self.dpi * size[0] # e.g. 2.0 inches
+        self.height = self.dpi * size[1] # e.g. 5.0 inches
         self.figure, self.axis = plt.subplots()
         self.file_path = os.path.join(path, '%s.png' % scale_name)
         self.figure.set_tight_layout(False)
-        self.figure.set_size_inches(3, 6)
+        self.figure.set_size_inches(*size)
 
         # Reverse the labels and color order; the drawing process is backwards
         #   from intuition
@@ -278,15 +293,18 @@ class Legend:
         warnings.filterwarnings('ignore', r'.*tight_layout.*',
             UserWarning, r'.*figure.*')
 
-    def __label__(self, xy, text):
+    def __label__(self, xy, text, x_offset=0):
         # Calls a text label on the plot
-        plt.text(xy[0], xy[1], text, ha='left', va='bottom',
+        plt.text(xy[0] - (x_offset / self.dpi), xy[1], text, ha='left', va='bottom',
             family='sans-serif', size=13, color='#ffffff')
 
-    def render(self, patch_size=0.5, alpha=1.0):
+    def render(self, patch_size=0.5, alpha=1.0, x_offset=100):
         '''Draws the legend graphic and saves it to a file.'''
         n = len(self.colors)
         s = patch_size
+
+        # This offset is transformed to "data" coordinates (inches)
+        left_offset = (-s * 1.5) - (x_offset / self.dpi)
 
         # Create grid to plot the artists
         grid = np.concatenate((
@@ -294,20 +312,23 @@ class Legend:
             np.arange(-n, 1)[1:].reshape(n, 1)
         ), axis=1)
 
-        plt.text(-s, 1.1, 'Legend', family='sans-serif', size=14, weight='bold',
-            color='#ffffff')
+        plt.text(left_offset, 1.1, 'Legend', family='sans-serif',
+            size=14, weight='bold', color='#ffffff')
 
         patches = []
         for i in range(n):
             # Add a rectangle
             rect = mpatches.Rectangle(grid[i] - [0, 0], s, s, ec='none')
             patches.append(rect)
-            self.__label__(grid[i], self.labels[i])
+            self.__label__(grid[i], self.labels[i], x_offset)
 
         collection = PatchCollection(patches, alpha=alpha)
 
         # Space the patches and the text labels
-        collection.set_offsets(np.array([[-(patch_size) * self.dpi * 0.75, 0]]))
+        collection.set_offset_position('data')
+        collection.set_offsets(np.array([
+            [left_offset, 0]
+        ]))
 
         collection.set_facecolors(self.colors)
         #collection.set_edgecolor('#ffffff') # Draw color for box outlines
@@ -317,7 +338,7 @@ class Legend:
         plt.axis('equal')
         plt.axis('off')
         plt.savefig(self.file_path, facecolor=self.bg_color, dpi=self.dpi,
-            pad_inches=0, bbox_inches='tight')
+            pad_inches=0)
 
         return self.file_path
 
@@ -331,8 +352,8 @@ if __name__ == '__main__':
     kmz = KMZView(output_path, files)
     kmz.render()
 
-    #legend = Legend(DivergingColors('RdBu3', COLORS.get('RdBu3')).legend_entries(), output_path, 'RdBu3')
-    #legend = Legend(DivergingColors('BrBG11').legend_entries(), output_path, 'BrBG11')
+    #legend = Legend((2, 5), DivergingColors('RdBu3', COLORS.get('RdBu3')).legend_entries(), output_path, 'RdBu3')
+    #legend = Legend((2, 5), DivergingColors('BrBG11').legend_entries(), output_path, 'BrBG11')
     #legend.render()
 
 
