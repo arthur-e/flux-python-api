@@ -180,7 +180,7 @@ class KrigedXCO2Matrix(XCO2Matrix):
         'transforms': {
             'errors': lambda x: math.sqrt(x)
         },
-        'units': ['degrees', 'degrees', 'ppm', 'ppm^2', None, None, None, None, None],
+        'units': ['degrees', 'degrees', 'ppm', 'ppm', None, None, None, None, None],
         'var_name': 'krigedData',
     }
     

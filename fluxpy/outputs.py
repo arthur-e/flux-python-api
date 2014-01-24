@@ -58,7 +58,7 @@ class AbstractGridView:
 
     def __description__(self, keys):
         # Remove plurals
-        field_names = map(lambda s: s.rstrip('s'), keys)
+        field_names = [s.rstrip('s') for s in keys if s is not None]
 
         # KML Placemark description template
         desc_tpl = '<h3>{{x}}, {{y}}</h3><h4>{k1}: %s {u1}<h4>'.format(x='{x}',
@@ -291,13 +291,15 @@ class GriddedKMLView(AbstractGridView):
     '''
 
     def render(self, query, output_path, keys=('values', 'errors'),
-            bins=3, color='BrBG11', vscale=100000):
+            bins=3, color='BrBG11', vscale=1000, vpow=2, cutoffs=(None, 1.2)):
         '''
         Generates a KML view of gridded, 3D data using up to two fields,
         given by the dictionary keys, in the connected data e.g. the first
         field will be used to encode color and the second field to encode the
         KML Polygon extrusion height. Assumes that each grid cell has a
-        single longitude-latitude pair describing its centroid.
+        single longitude-latitude pair describing its centroid. The keys
+        argument is a sequence of strings representing field names to use for
+        these symbols, in order: the polygon style, the altitude.
         '''
         file_paths = [] # Remember all files that may need to be bundled in KMZ
         scale = self.colors.get(color)
@@ -339,8 +341,12 @@ class GriddedKMLView(AbstractGridView):
             # Iterate through the rows of the Data Frame
             for j, series in df.iterrows():
 
-                coords = self.__square_bounds__((series['x'], series['y']),
-                    (series[f2] * vscale)) # Altitude
+                if f2 is not None:
+                    coords = self.__square_bounds__((series['x'], series['y']),
+                        math.pow(series[f2] * vscale, vpow)) # Altitude
+
+                else:
+                    coords = self.__square_bounds__((series['x'], series['y']))
 
                 placemarks.append(KML.Placemark(
                     KML.description(desc_tpl.format(**dict(series))),
