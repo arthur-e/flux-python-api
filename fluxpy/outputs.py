@@ -33,6 +33,31 @@ class AbstractGridView:
         self.field_units = dict(zip(model.defaults.get('columns'),
             model.defaults.get('units')))
 
+    def __breakpoints__(self, series, bins):
+        if not isinstance(bins, int):
+            raise TypeError('Integer bins argument expected')
+
+        steps = 10 
+        ll = 0 # Lower limit
+
+        # If there is an odd number of bins...
+        if bins % 2 > 0:
+            ll = 5
+
+        #TODO Use -/+ np.inf
+
+        # We'll move the decimal place left by one (1) for these calculations...
+        bps = range(-(bins * 5), 0, steps)
+        bps.extend(range(ll, (bins * 5), steps))
+        bps.append(bins * 5)
+        bps = map(lambda x: (x * 0.1 * series.std()) + series.mean(), bps)
+        bps[0] = -np.inf
+        bps.pop()
+        bps.append(np.inf)
+
+        assert len(bps) - 1 == bins, 'The correct number of breakpoints could not be calculated'
+        return bps
+
     def __description__(self, keys):
         # Remove plurals
         field_names = map(lambda s: s.rstrip('s'), keys)
@@ -65,6 +90,9 @@ class AbstractGridView:
             KML.rotationXY(x='0', y='0', xunits='fraction', yunits='fraction'),
             KML.Icon(KML.href(os.path.basename(path))),
             KML.size(x=dim[0], y=dim[1], xunits='pixels', yunits='pixels'))
+
+    def __style__(self, score, color):
+        pass#TODO
 
     def __square_bounds__(self, coords, altitude=None):
         # For this gridded product, assume square cells; get grid cell resolution
@@ -118,7 +146,7 @@ class AbstractScoreView(AbstractGridView):
 
         return labels
 
-    def __score_style__(self, score, color):
+    def __style__(self, score, color):
         num_score_classes = self.colors.get(color).score_length
 
         # Calculates the style ID of the color to use
@@ -248,9 +276,100 @@ class Legend:
         return self.file_path
 
 
-class ScoredKMLView(AbstractScoreView):
+class GriddedKMLView(AbstractGridView):
     '''
     Writes out KML files from spatio-temporal data provided by a Mediator.
+    '''
+
+    def render(self, query, output_path, keys=('values', 'errors'),
+            bins=3, color='BrBG11', vscale=100000):
+        '''
+        Generates a KML view of gridded, 3D data using up to two fields,
+        given by the dictionary keys, in the connected data e.g. the first
+        field will be used to encode color and the second field to encode the
+        KML Polygon extrusion height. Assumes that each grid cell has a
+        single longitude-latitude pair describing its centroid.
+        '''
+        file_paths = [] # Remember all files that may need to be bundled in KMZ
+        scale = self.colors.get(color)
+
+        if not os.path.exists(output_path):
+            raise ValueError('The specified output_path does not exist or cannot be read')
+
+        if bins > 9:
+            raise ValueError('Cannot have more than 9 bins in sequential scales')
+
+        # Get field names
+        f1, f2 = keys
+
+        # Get the <description> element template
+        desc_tpl = self.__description__(keys)
+
+        # Execute the query
+        dfs = self.__query__(query)
+
+        # Parse out the identifier and the DataFrame
+        i = 0 # Iterate through the returned DataFrames
+        for ident, df in dfs.items():
+            placemarks = [] # Initial container
+
+            breakpoints = self.__breakpoints__(df[f1], bins)
+
+            ipdb.set_trace()#FIXME
+
+            # Get z score labels
+            labels = ['' for i in range(bins)]#TODO
+
+            # Generate a legend graphic and get the <ScreenOverlay> element for such a graphic
+            legend = Legend(self.legend_size, zip(scale.hex_colors(), labels),
+                output_path, color)
+
+            # Iterate through the rows of the Data Frame
+            for j, series in df.iterrows():
+
+                coords = self.__square_bounds__((series['x'], series['y']),
+                    (series[f2] * vscale)) # Altitude
+
+                placemarks.append(KML.Placemark(
+                    KML.description(desc_tpl.format(**dict(series))),
+                    KML.styleUrl(self.__style__(series[f1], color)),
+                    KML.Polygon(
+                        KML.extrude(1),
+                        KML.altitudeMode('absolute'),
+                        KML.outerBoundaryIs(
+                            KML.LinearRing(
+                                KML.coordinates(*coords))))))
+
+            preamble = list(scale.kml_styles(outlines=False, alpha=self.alpha))
+            preamble.append(KML.name(self.collection_name))
+
+            # Add the legends and the <Folder> element with <Placemarks>
+            preamble.extend(self.__legend_vertical__(vscale=vscale))
+            preamble.extend([
+                # Calculate the legend image dimensions based on its size in inches and the DPI
+                self.__legend__(map(lambda x: x * legend.dpi, self.legend_size),
+                    color, legend.file_path),
+                KML.Folder(KML.name(ident), *placemarks)
+            ])
+
+            doc = KML.Document(*preamble)
+
+            with open(os.path.join(output_path, self.filename_pattern % (ident, i)), 'wb') as stream:
+                stream.write(etree.tostring(doc))
+
+            file_paths.append(legend.render())
+
+            i += 1
+
+        file_paths.insert(0, output_path)
+
+        return file_paths
+
+
+class ScoredKMLView(AbstractScoreView):
+    '''
+    Writes out KML files from spatio-temporal data provided by a Mediator
+    where the values represented in the KML are standard scores (z scores).
     '''
 
     def __legend_vertical__(self, levels=5, origin=(0, 0), vscale=100000):
@@ -322,7 +441,7 @@ class ScoredKMLView(AbstractScoreView):
 
                 placemarks.append(KML.Placemark(
                     KML.description(desc_tpl.format(**dict(series))),
-                    KML.styleUrl(self.__score_style__(series[f1], color)),
+                    KML.styleUrl(self.__style__(series[f1], color)),
                     KML.Polygon(
                         KML.extrude(1),
                         KML.altitudeMode('absolute'),
@@ -360,7 +479,8 @@ if __name__ == '__main__':
     from fluxpy.mediators import *
     from fluxpy.models import *
     output_path = '/home/kaendsle/Desktop/'
-    kml = ScoredKMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
+    #kml = ScoredKMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
+    kml = GriddedKMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
     files = kml.render({}, output_path, color='dBrBG11')
     kmz = KMZWrapper(output_path, files)
     kmz.render()
