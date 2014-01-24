@@ -75,27 +75,6 @@ class DivergingColors(AbstractColors):
         #   of z-scores possible is the number of available classes minus 1
         #   divided by half)
         self.score_length = int(math.floor(len(self) * 0.5))
-
-    def labels(self):
-        '''Generate a list of text labels to use for the colors'''
-        labels = []
-
-        i = self.score_length
-        for color in self.base:
-            if i > 0:
-                code = 'z Score: +%d' % i
-
-            elif i == 0:
-                code = 'Mean'
-
-            else:
-                code = 'z Score: %d' % i
-
-            labels.append(code)
-
-            i -= 1 # Counting down
-
-        return labels
     
     def kml_styles(self, outlines=False, alpha=1.0):
         '''Generates PyKML <Style> instances for each color in the ramp'''
@@ -118,6 +97,29 @@ class DivergingColors(AbstractColors):
                     KML.PolyStyle(color), id=(code % (self.name, i))))
 
             i -= 1 # Counting down
+
+        return styles
+
+
+class SequentialColors(AbstractColors):
+    '''
+    Represents a sequential color scale; expects colors in descending order
+    of thir associated quanitities (e.g. if "red" == 5 and "blue" == 1, then
+    they should be ordered "red" first and "blue" last).
+    '''
+    base = COLORS.get('BuGn3')
+    
+    def kml_styles(self, labels, outlines=False, alpha=1.0):
+        '''Generates PyKML <Style> instances for each color in the ramp'''
+        styles = list()
+
+        for label, color in zip(labels, self.kml_colors(alpha)):
+            if outlines:
+                styles.append(KML.Style(KML.PolyStyle(color), id=(label)))
+                
+            else:
+                styles.append(KML.Style(KML.LineStyle(KML.width(0)),
+                    KML.PolyStyle(color), id=(label)))
 
         return styles
 

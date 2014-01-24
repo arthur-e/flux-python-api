@@ -15,14 +15,14 @@ from pykml.factory import KML_ElementMaker as KML
 from lxml import etree
 from shapely.geometry import Point
 from fluxpy import DB, DEFAULT_PATH, RESERVED_COLLECTION_NAMES
-from fluxpy.colors import COLORS, DivergingColors
+from fluxpy.colors import COLORS, DivergingColors, SequentialColors
 
 class AbstractGridView:
     '''
     An abstract class of gridded outputs.
     '''
     alpha = 1.0
-    colors = dict([(n, DivergingColors(n)) for n in COLORS.keys()])
+    colors = dict([(n, SequentialColors(n)) for n in COLORS.keys()])
     filename_pattern = '%s_%d.kml' # Must have %s and %d format strings in name
     legend_size = (2.5, 5.0) # Size of the legend in inches
 
@@ -43,8 +43,6 @@ class AbstractGridView:
         # If there is an odd number of bins...
         if bins % 2 > 0:
             ll = 5
-
-        #TODO Use -/+ np.inf
 
         # We'll move the decimal place left by one (1) for these calculations...
         bps = range(-(bins * 5), 0, steps)
@@ -78,6 +76,19 @@ class AbstractGridView:
 
         return desc_tpl
 
+    def __labels__(self, breakpoints, units='', fmt='%.1f'):
+        bps = [bp for bp in breakpoints if np.isfinite(bp)]
+        labels = [('</= ' + fmt) % bps[0]]
+
+        i = 1
+        while i < len(bps):
+            labels.append(('(' + fmt + ' - ' + fmt + ']') % (bps[i - 1], bps[i]))
+            i += 1
+
+        labels.append(('> ' + fmt) % bps[-1])
+
+        return [('%s ' + units) % s for s in labels]
+
     def __legend__(self, dimensions, style, path, x_fraction=0.1, y_fraction=0.95):
         dim = map(str, dimensions)
 
@@ -91,8 +102,8 @@ class AbstractGridView:
             KML.Icon(KML.href(os.path.basename(path))),
             KML.size(x=dim[0], y=dim[1], xunits='pixels', yunits='pixels'))
 
-    def __style__(self, score, color):
-        pass#TODO
+    def __style__(self, label):
+        return '#%s' % str(label)
 
     def __square_bounds__(self, coords, altitude=None):
         # For this gridded product, assume square cells; get grid cell resolution
@@ -122,7 +133,7 @@ class AbstractScoreView(AbstractGridView):
     An abstract class of outputs based on standard scores (z scores).
     '''
 
-    def __score_labels__(self, sigmas, clamped=False):
+    def __labels__(self, sigmas, clamped=False):
         '''Create legend labels for standard scores (z scores)'''
         labels = []
 
@@ -175,13 +186,11 @@ class KMZWrapper:
     kml_matcher = re.compile(r'.+\.kml$')
 
     def __init__(self, path, files):
-        self.path = path
-        self.filename = os.path.join(path, 'output.kmz')
         self.files = files
+        self.path = path
 
-    def render(self, files=None):
-        if files is not None:
-            self.files = files
+    def render(self, filename='output.kmz'):
+        self.filename = os.path.join(self.path, filename)
 
         with ZipFile(self.filename, 'w', ZIP_DEFLATED) as archive:
             for path in self.files:
@@ -313,12 +322,15 @@ class GriddedKMLView(AbstractGridView):
         for ident, df in dfs.items():
             placemarks = [] # Initial container
 
+            # Get breakpoints, labels based on the requested number of bins
             breakpoints = self.__breakpoints__(df[f1], bins)
+            labels = self.__labels__(breakpoints, self.field_units[f1])
 
-            ipdb.set_trace()#FIXME
+            # Bin each value based on the breakpoints; format the labels
+            df['bin'] = pd.cut(df[f1], breakpoints, labels=labels)
 
-            # Get z score labels
-            labels = ['' for i in range(bins)]#TODO
+            if not isinstance(scale, DivergingColors):
+                labels = labels[::-1] # Reverse
 
             # Generate a legend graphic and get the <ScreenOverlay> element for such a graphic
             legend = Legend(self.legend_size, zip(scale.hex_colors(), labels),
@@ -332,7 +344,7 @@ class GriddedKMLView(AbstractGridView):
 
                 placemarks.append(KML.Placemark(
                     KML.description(desc_tpl.format(**dict(series))),
-                    KML.styleUrl(self.__style__(series[f1], color)),
+                    KML.styleUrl('#%s' % series['bin']),
                     KML.Polygon(
                         KML.extrude(1),
                         KML.altitudeMode('absolute'),
@@ -340,11 +352,10 @@ class GriddedKMLView(AbstractGridView):
                             KML.LinearRing(
                                 KML.coordinates(*coords))))))
 
-            preamble = list(scale.kml_styles(outlines=False, alpha=self.alpha))
+            preamble = list(scale.kml_styles(labels, outlines=False, alpha=self.alpha))
             preamble.append(KML.name(self.collection_name))
 
             # Add the legends and the <Folder> element with <Placemarks>
-            preamble.extend(self.__legend_vertical__(vscale=vscale))
             preamble.extend([
                 # Calculate the legend image dimensions based on its size in inches and the DPI
                 self.__legend__(map(lambda x: x * legend.dpi, self.legend_size),
@@ -357,7 +368,7 @@ class GriddedKMLView(AbstractGridView):
             with open(os.path.join(output_path, self.filename_pattern % (ident, i)), 'wb') as stream:
                 stream.write(etree.tostring(doc))
 
-            file_paths.append(legend.render())
+            file_paths.append(legend.render(x_offset=150))
 
             i += 1
 
@@ -371,6 +382,7 @@ class ScoredKMLView(AbstractScoreView):
     Writes out KML files from spatio-temporal data provided by a Mediator
     where the values represented in the KML are standard scores (z scores).
     '''
+    colors = dict([(n, DivergingColors(n)) for n in COLORS.keys()])
 
     def __legend_vertical__(self, levels=5, origin=(0, 0), vscale=100000):
         # Generate a vertical legend for error
@@ -427,7 +439,10 @@ class ScoredKMLView(AbstractScoreView):
             df[f2] = s2 = self.__scores__(df[keys[1]]).apply(lambda x: math.ceil(x) + 1 if x > 0 else 1)
 
             # Get z score labels
-            labels = self.__score_labels__(scale.score_length, len(s1.unique()) > len(scale))
+            labels = self.__labels__(scale.score_length, len(s1.unique()) > len(scale))
+
+            if not isinstance(scale, DivergingColors):
+                labels = labels[::-1] # Reverse
 
             # Generate a legend graphic and get the <ScreenOverlay> element for such a graphic
             legend = Legend(self.legend_size, zip(scale.hex_colors(), labels),
@@ -479,11 +494,15 @@ if __name__ == '__main__':
     from fluxpy.mediators import *
     from fluxpy.models import *
     output_path = '/home/kaendsle/Desktop/'
+
     #kml = ScoredKMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
+    #files = kml.render({}, output_path, color='dBrBG11')
+
     kml = GriddedKMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
-    files = kml.render({}, output_path, color='dBrBG11')
+    files = kml.render({}, output_path, bins=3, color='BuGn3')
+
     kmz = KMZWrapper(output_path, files)
-    kmz.render()
+    kmz.render('static_3d_grid_sequential_3_bins.kmz')
 
     #legend = Legend((2, 5), DivergingColors('dRdBu3', COLORS.get('dRdBu3')).legend_entries(), output_path, 'dRdBu3')
     #legend = Legend((2, 5), DivergingColors('dBrBG11').legend_entries(), output_path, 'dBrBG11')
