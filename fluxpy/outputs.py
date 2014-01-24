@@ -21,7 +21,10 @@ class AbstractGridView:
     '''
     An abstract class of gridded outputs.
     '''
+    alpha = 1.0
     colors = dict([(n, DivergingColors(n)) for n in COLORS.keys()])
+    filename_pattern = '%s_%d.kml' # Must have %s and %d format strings in name
+    legend_size = (2.5, 5.0) # Size of the legend in inches
 
     def __init__(self, mediator, model, collection_name):
         self.mediator = mediator
@@ -49,6 +52,19 @@ class AbstractGridView:
             desc_tpl = desc_tpl % ('{%s}' % keys[0])
 
         return desc_tpl
+
+    def __legend__(self, dimensions, style, path, x_fraction=0.1, y_fraction=0.95):
+        dim = map(str, dimensions)
+
+        # Note: KML does not use SVG, matplotlib drawing orientation; instead,
+        #   fractional position is measured from the bottom left corner
+        return KML.ScreenOverlay(
+            KML.name('Legend'),
+            KML.overlayXY(x=str(x_fraction), y=str(y_fraction), xunits='fraction', yunits='fraction'),
+            KML.screenXY(x='0', y='1', xunits='fraction', yunits='fraction'),
+            KML.rotationXY(x='0', y='0', xunits='fraction', yunits='fraction'),
+            KML.Icon(KML.href(os.path.basename(path))),
+            KML.size(x=dim[0], y=dim[1], xunits='pixels', yunits='pixels'))
 
     def __square_bounds__(self, coords, altitude=None):
         # For this gridded product, assume square cells; get grid cell resolution
@@ -121,130 +137,6 @@ class AbstractScoreView(AbstractGridView):
         mean = series.mean()
         std = series.std()
         return series.apply(lambda x: x - mean).apply(lambda x: x * (1/std))
-
-
-class ScoredKMLView(AbstractScoreView):
-    '''
-    Writes out KML files from spatio-temporal data provided by a Mediator.
-    '''
-    alpha = 1.0
-    filename_pattern = '%s_%d.kml' # Must have %s and %d format strings in name
-    legend_size = (2.5, 5.0) # Size of the legend in inches
-
-    def __legend__(self, dimensions, style, path, x_fraction=0.1, y_fraction=0.95):
-        dim = map(str, dimensions)
-
-        # Note: KML does not use SVG, matplotlib drawing orientation; instead,
-        #   fractional position is measured from the bottom left corner
-        return KML.ScreenOverlay(
-            KML.name('Legend'),
-            KML.overlayXY(x=str(x_fraction), y=str(y_fraction), xunits='fraction', yunits='fraction'),
-            KML.screenXY(x='0', y='1', xunits='fraction', yunits='fraction'),
-            KML.rotationXY(x='0', y='0', xunits='fraction', yunits='fraction'),
-            KML.Icon(KML.href(os.path.basename(path))),
-            KML.size(x=dim[0], y=dim[1], xunits='pixels', yunits='pixels'))
-
-    def __legend_vertical__(self, levels=5, origin=(0, 0), vscale=100000):
-        # Generate a vertical legend for error
-        elements = []
-        z = 1
-        while z <= levels:
-            # Assumes that 1 unit height (vscale) is the mean error
-            elements.append(KML.Placemark(
-                KML.name('+%d z Score' % (z - 1) if z > 1 else 'Mean Error'),
-                KML.Style(
-                    KML.IconStyle(
-                        KML.Icon(
-                            KML.href('http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png')))),
-                KML.Point(
-                    KML.extrude(1),
-                    KML.altitudeMode('absolute'),
-                    KML.coordinates(('%d,%d,' % (origin[0] + z,
-                        origin[1])) + str(z * vscale)))))
-            z += 1
-
-        return elements
-
-    def render(self, query, output_path, keys=('values', 'errors'),
-            color='dBrBG11', vscale=100000):
-        '''
-        Generates a KML view of gridded, 3D data with standard scores (z scores)
-        using up to two fields, given by the dictionary keys, in the connected 
-        data e.g. the first field will be used to encode color and the second
-        field to encode the KML Polygon extrusion height. Assumes that each grid
-        cell has a single longitude-latitude pair describing its centroid.
-        '''
-        file_paths = [] # Remember all files that may need to be bundled in KMZ
-        scale = self.colors.get(color)
-
-        if not os.path.exists(output_path):
-            raise ValueError('The specified output_path does not exist or cannot be read')
-
-        # Get field names
-        f1, f2 = map(lambda x: 'z%s' % x, keys)
-
-        # Get the <description> element template
-        desc_tpl = self.__description__(keys)
-
-        # Execute the query
-        dfs = self.__query__(query)
-
-        # Parse out the identifier and the DataFrame
-        i = 0 # Iterate through the returned DataFrames
-        for ident, df in dfs.items():
-            placemarks = [] # Initial container
-
-            # Calculate z scores for the values
-            df[f1] = s1 = self.__scores__(df[keys[0]]).apply(math.ceil)
-            df[f2] = s2 = self.__scores__(df[keys[1]]).apply(lambda x: math.ceil(x) + 1 if x > 0 else 1)
-
-            # Get z score labels
-            labels = self.__score_labels__(scale.score_length, len(s1.unique()) > len(scale))
-
-            # Generate a legend graphic and get the <ScreenOverlay> element for such a graphic
-            legend = Legend(self.legend_size, zip(scale.hex_colors(), labels),
-                output_path, color)
-
-            # Iterate through the rows of the Data Frame
-            for j, series in df.iterrows():
-
-                coords = self.__square_bounds__((series['x'], series['y']),
-                    (series[f2] * vscale)) # Altitude
-
-                placemarks.append(KML.Placemark(
-                    KML.description(desc_tpl.format(**dict(series))),
-                    KML.styleUrl(self.__score_style__(series[f1], color)),
-                    KML.Polygon(
-                        KML.extrude(1),
-                        KML.altitudeMode('absolute'),
-                        KML.outerBoundaryIs(
-                            KML.LinearRing(
-                                KML.coordinates(*coords))))))
-
-            preamble = list(scale.kml_styles(outlines=False, alpha=self.alpha))
-            preamble.append(KML.name(self.collection_name))
-
-            # Add the legends and the <Folder> element with <Placemarks>
-            preamble.extend(self.__legend_vertical__(vscale=vscale))
-            preamble.extend([
-                # Calculate the legend image dimensions based on its size in inches and the DPI
-                self.__legend__(map(lambda x: x * legend.dpi, self.legend_size),
-                    color, legend.file_path),
-                KML.Folder(KML.name(ident), *placemarks)
-            ])
-
-            doc = KML.Document(*preamble)
-
-            with open(os.path.join(output_path, self.filename_pattern % (ident, i)), 'wb') as stream:
-                stream.write(etree.tostring(doc))
-
-            file_paths.append(legend.render())
-
-            i += 1
-
-        file_paths.insert(0, output_path)
-
-        return file_paths
 
 
 class KMZWrapper:
@@ -354,6 +246,114 @@ class Legend:
             pad_inches=0)
 
         return self.file_path
+
+
+class ScoredKMLView(AbstractScoreView):
+    '''
+    Writes out KML files from spatio-temporal data provided by a Mediator.
+    '''
+
+    def __legend_vertical__(self, levels=5, origin=(0, 0), vscale=100000):
+        # Generate a vertical legend for error
+        elements = []
+        z = 1
+        while z <= levels:
+            # Assumes that 1 unit height (vscale) is the mean error
+            elements.append(KML.Placemark(
+                KML.name('+%d z Score' % (z - 1) if z > 1 else 'Mean Error'),
+                KML.Style(
+                    KML.IconStyle(
+                        KML.Icon(
+                            KML.href('http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png')))),
+                KML.Point(
+                    KML.extrude(1),
+                    KML.altitudeMode('absolute'),
+                    KML.coordinates(('%d,%d,' % (origin[0] + z,
+                        origin[1])) + str(z * vscale)))))
+            z += 1
+
+        return elements
+
+    def render(self, query, output_path, keys=('values', 'errors'),
+            color='dBrBG11', vscale=100000):
+        '''
+        Generates a KML view of gridded, 3D data with standard scores (z scores)
+        using up to two fields, given by the dictionary keys, in the connected 
+        data e.g. the first field will be used to encode color and the second
+        field to encode the KML Polygon extrusion height. Assumes that each grid
+        cell has a single longitude-latitude pair describing its centroid.
+        '''
+        file_paths = [] # Remember all files that may need to be bundled in KMZ
+        scale = self.colors.get(color)
+
+        if not os.path.exists(output_path):
+            raise ValueError('The specified output_path does not exist or cannot be read')
+
+        # Get field names
+        f1, f2 = map(lambda x: 'z%s' % x, keys)
+
+        # Get the <description> element template
+        desc_tpl = self.__description__(keys)
+
+        # Execute the query
+        dfs = self.__query__(query)
+
+        # Parse out the identifier and the DataFrame
+        i = 0 # Iterate through the returned DataFrames
+        for ident, df in dfs.items():
+            placemarks = [] # Initial container
+
+            # Calculate z scores for the values
+            df[f1] = s1 = self.__scores__(df[keys[0]]).apply(math.ceil)
+            df[f2] = s2 = self.__scores__(df[keys[1]]).apply(lambda x: math.ceil(x) + 1 if x > 0 else 1)
+
+            # Get z score labels
+            labels = self.__score_labels__(scale.score_length, len(s1.unique()) > len(scale))
+
+            # Generate a legend graphic and get the <ScreenOverlay> element for such a graphic
+            legend = Legend(self.legend_size, zip(scale.hex_colors(), labels),
+                output_path, color)
+
+            # Iterate through the rows of the Data Frame
+            for j, series in df.iterrows():
+
+                coords = self.__square_bounds__((series['x'], series['y']),
+                    (series[f2] * vscale)) # Altitude
+
+                placemarks.append(KML.Placemark(
+                    KML.description(desc_tpl.format(**dict(series))),
+                    KML.styleUrl(self.__score_style__(series[f1], color)),
+                    KML.Polygon(
+                        KML.extrude(1),
+                        KML.altitudeMode('absolute'),
+                        KML.outerBoundaryIs(
+                            KML.LinearRing(
+                                KML.coordinates(*coords))))))
+
+            preamble = list(scale.kml_styles(outlines=False, alpha=self.alpha))
+            preamble.append(KML.name(self.collection_name))
+
+            # Add the legends and the <Folder> element with <Placemarks>
+            preamble.extend(self.__legend_vertical__(vscale=vscale))
+            preamble.extend([
+                # Calculate the legend image dimensions based on its size in inches and the DPI
+                self.__legend__(map(lambda x: x * legend.dpi, self.legend_size),
+                    color, legend.file_path),
+                KML.Folder(KML.name(ident), *placemarks)
+            ])
+
+            doc = KML.Document(*preamble)
+
+            with open(os.path.join(output_path, self.filename_pattern % (ident, i)), 'wb') as stream:
+                stream.write(etree.tostring(doc))
+
+            file_paths.append(legend.render())
+
+            i += 1
+
+        file_paths.insert(0, output_path)
+
+        return file_paths
 
 
 if __name__ == '__main__':
