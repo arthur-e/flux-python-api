@@ -110,7 +110,11 @@ class AbstractGridView:
         gridres = self.model.defaults.get('resolution').get('x_length')
 
         # Get the rectangular bounds of the model cell at the grid resolution
-        bounds = map(str, Point(coords).buffer(gridres, 4).bounds)
+        if not any(map(lambda x: np.isnan(x), coords)):
+            bounds = map(str, Point(coords).buffer(gridres, 4).bounds)
+
+        else:
+            return None # Skip NaNs
 
         # Coordinates should be specified counter-clockwise
         # (https://developers.google.com/kml/documentation/kmlreference#polygon)
@@ -183,25 +187,26 @@ class KMZWrapper:
     Generates a Zipped KML; a ZIP archive with KML files and dependencies (e.g.
     image overlays, icons) inside.
     '''
-    kml_matcher = re.compile(r'.+\.kml$')
+    kml_kmz_matcher = re.compile(r'.+\.(kml|kmz)$')
 
-    def __init__(self, path, files):
-        self.files = files
-        self.path = path
+    def __init__(self, output_path, kml_file):
+        self.output_path = output_path
+        self.file_path = os.path.dirname(kml_file)
+        self.kml_file = kml_file
 
-    def render(self, filename='output.kmz'):
-        self.filename = os.path.join(self.path, filename)
+    def __add_path__(self, path):
+        if self.kml_kmz_matcher.match(path) is None:
+            self.archive.write(os.path.join(self.file_path, path),
+                os.path.basename(path))
 
-        with ZipFile(self.filename, 'w', ZIP_DEFLATED) as archive:
-            for path in self.files:
-                if os.path.isdir(path):
-                    for filename in os.listdir(path):
-                        if self.kml_matcher.match(filename) is not None:
-                            archive.write(os.path.join(path, filename), filename)
+    def render(self, output_path='./output.kmz'):
+        self.output_path = output_path
 
-                else:
-                    archive.write(path, os.path.basename(path))
+        with ZipFile(self.output_path, 'w', ZIP_DEFLATED) as self.archive:
+            self.archive.write(self.kml_file, os.path.basename(self.kml_file))
 
+            for path in os.listdir(self.file_path):
+                self.__add_path__(path)
 
 class Legend:
     '''
@@ -347,6 +352,9 @@ class GriddedKMLView(AbstractGridView):
 
                 else:
                     coords = self.__square_bounds__((series['x'], series['y']))
+
+                if coords is None:
+                    continue
 
                 placemarks.append(KML.Placemark(
                     KML.description(desc_tpl.format(**dict(series))),
@@ -507,7 +515,7 @@ if __name__ == '__main__':
     kml = GriddedKMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
     files = kml.render({}, output_path, bins=3, color='BuGn3')
 
-    kmz = KMZWrapper(output_path, files)
+    kmz = KMZWrapper(output_path, files[0])
     kmz.render('static_3d_grid_sequential_3_bins.kmz')
 
     #legend = Legend((2, 5), DivergingColors('dRdBu3', COLORS.get('dRdBu3')).legend_entries(), output_path, 'dRdBu3')
