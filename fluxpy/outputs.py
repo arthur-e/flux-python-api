@@ -11,7 +11,9 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from zipfile import ZipFile, ZIP_DEFLATED
 from matplotlib.collections import PatchCollection
+from pykml.factory import nsmap
 from pykml.factory import KML_ElementMaker as KML
+from pykml.factory import GX_ElementMaker as GX
 from lxml import etree
 from shapely.geometry import Point
 from fluxpy import DB, DEFAULT_PATH, RESERVED_COLLECTION_NAMES
@@ -127,6 +129,79 @@ class AbstractGridView:
             coords = map(lambda c: (c[0], c[1], str(altitude)), coords)
 
         return ' '.join(map(lambda c: ','.join(c), coords))
+
+    def __tour__(self):
+        # Define a variable for the Google Extensions namespace URL string
+        gxns = '{' + nsmap['gx'] + '}'
+
+        tour = GX.Tour(KML.name('Play me!'), GX.Playlist())
+
+        tour.Playlist.append(
+            GX.FlyTo(
+            GX.duration(5),
+            GX.flyToMode('smooth'),
+            KML.LookAt(
+                KML.longitude(-45),
+                KML.latitude(-43),
+                KML.altitude(0),
+                KML.heading(355),
+                KML.tilt(55),
+                KML.range(6000000.0),
+                KML.altitudeMode('absolute'))))
+
+        tour.Playlist.append(
+            GX.FlyTo(
+            GX.duration(10),
+            GX.flyToMode('smooth'),
+            KML.LookAt(
+                KML.longitude(-80),
+                KML.latitude(63),
+                KML.altitude(0),
+                KML.heading(345),
+                KML.tilt(45),
+                KML.range(10000000.0),
+                KML.altitudeMode('absolute'))))
+
+        tour.Playlist.append(
+            GX.FlyTo(
+            GX.duration(10),
+            GX.flyToMode('smooth'),
+            KML.LookAt(
+                KML.longitude(-131),
+                KML.latitude(63),
+                KML.altitude(0),
+                KML.heading(345),
+                KML.tilt(35),
+                KML.range(20000000.0),
+                KML.altitudeMode('absolute'))))
+
+        tour.Playlist.append(
+            GX.FlyTo(
+            GX.duration(5),
+            GX.flyToMode('smooth'),
+            KML.LookAt(
+                KML.longitude(53),
+                KML.latitude(25),
+                KML.altitude(0),
+                KML.heading(270),
+                KML.tilt(35),
+                KML.range(20000000.0),
+                KML.altitudeMode('absolute'))))
+
+        tour.Playlist.append(
+            GX.FlyTo(
+            GX.duration(10),
+            GX.flyToMode('smooth'),
+            KML.LookAt(
+                KML.longitude(140),
+                KML.latitude(-4),
+                KML.altitude(0),
+                KML.heading(0),
+                KML.tilt(55),
+                KML.range(10000000.0),
+                KML.altitudeMode('absolute'))))
+
+        return tour
 
     def __query__(self, query_object):
         return self.mediator.load_from_db(self.collection_name, query_object)
@@ -290,7 +365,7 @@ class Legend:
         return self.file_path
 
 
-class GriddedKMLView(AbstractGridView):
+class StaticKMLView(AbstractGridView):
     '''
     Writes out KML files from spatio-temporal data provided by a Mediator.
     '''
@@ -341,7 +416,7 @@ class GriddedKMLView(AbstractGridView):
 
             # Generate a legend graphic and get the <ScreenOverlay> element for such a graphic
             legend = Legend(self.legend_size, zip(scale.hex_colors(), labels),
-                output_path, color)
+                output_path, ident)
 
             # Iterate through the rows of the Data Frame
             for j, series in df.iterrows():
@@ -371,6 +446,7 @@ class GriddedKMLView(AbstractGridView):
 
             # Add the legends and the <Folder> element with <Placemarks>
             preamble.extend([
+                self.__tour__(),
                 # Calculate the legend image dimensions based on its size in inches and the DPI
                 self.__legend__(map(lambda x: x * legend.dpi, self.legend_size),
                     color, legend.file_path),
@@ -379,14 +455,13 @@ class GriddedKMLView(AbstractGridView):
 
             doc = KML.Document(*preamble)
 
-            with open(os.path.join(output_path, self.filename_pattern % (ident, i)), 'wb') as stream:
+            output_name = os.path.join(output_path, self.filename_pattern % (ident, i))
+            with open(output_name, 'wb') as stream:
                 stream.write(etree.tostring(doc))
 
-            file_paths.append(legend.render(x_offset=150))
+            file_paths.append((output_name, legend.render(x_offset=150)))
 
             i += 1
-
-        file_paths.insert(0, output_path)
 
         return file_paths
 
@@ -512,11 +587,13 @@ if __name__ == '__main__':
     #kml = ScoredKMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
     #files = kml.render({}, output_path, color='dBrBG11')
 
-    kml = GriddedKMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
-    files = kml.render({}, output_path, bins=3, color='BuGn3')
+    kml = StaticKMLView(Grid3DMediator(), KrigedXCO2Matrix, 'xco2')
+    files = kml.render({
+        '_id': datetime.datetime.strptime('2009-06-15T00:00:00', '%Y-%m-%dT%H:%M:%S')
+    }, output_path, bins=3, color='BuGn3')
 
-    kmz = KMZWrapper(output_path, files[0])
-    kmz.render('static_3d_grid_sequential_3_bins.kmz')
+    kmz = KMZWrapper(output_path, files.pop()[0])
+    kmz.render(os.path.join(output_path, 'static_3d_grid_sequential_3_bins.kmz'))
 
     #legend = Legend((2, 5), DivergingColors('dRdBu3', COLORS.get('dRdBu3')).legend_entries(), output_path, 'dRdBu3')
     #legend = Legend((2, 5), DivergingColors('dBrBG11').legend_entries(), output_path, 'dBrBG11')
