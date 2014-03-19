@@ -1,12 +1,42 @@
-import unittest, os, csv, datetime
+import ipdb
+import csv
+import datetime
+import os
+import unittest
 import pandas as pd
 import numpy as np
 import h5py
 from lxml import etree
 from fluxpy.legacy.transform import bulk_hdf5_to_csv
-from fluxpy.mediators import Grid3DMediator, Unstructured3DMediator
-from fluxpy.models import KrigedXCO2Matrix, XCO2Matrix
+from fluxpy.mediators import Grid4DMediator, Grid3DMediator, Unstructured3DMediator
+from fluxpy.models import KrigedXCO2Matrix, XCO2Matrix, InvertedSurfaceFlux
 from fluxpy.colors import DivergingColors
+
+class TestInvertedSurfaceFluxes(unittest.TestCase):
+    '''Tests for proper handling of inverted CO2 surface fluxes (e.g. CASA GFED output)'''
+
+    mediator = Grid4DMediator()
+    path = '/usr/local/project/flux-python-api/fluxpy/tests/'
+
+    def test_abstract_model_instance(self):
+        '''Should properly instantiate a SpatioTemporalMatrix model instance'''
+        flux = InvertedSurfaceFlux(os.path.join(self.path, 'casagfed2004.mat'),
+            timestamp='2004-01-01T00:00:00')
+
+        self.assertEqual(flux.var_name, 'test')
+        self.assertEqual(flux.interval, 10800)
+        self.assertEqual(flux.range, None)
+        self.assertEqual(flux.timestamp, '2004-01-01T00:00:00')
+
+    def test_model_instance(self):
+        '''Should properly instantiate an InvertedSurfaceFlux model instance'''
+        flux = InvertedSurfaceFlux(os.path.join(self.path, 'casagfed2004.mat'),
+            timestamp='2004-06-30T00:00:00', interval='fubar')#FIXME
+
+        self.assertEqual(flux.var_name, 'test')
+        self.assertEqual(flux.interval, 'fubar')#FIXME
+        self.assertEqual(flux.timestamp, '2004-06-30T00:00:00')
+
 
 class TestXCO2Data(unittest.TestCase):
     '''Tests for proper handling of XCO2 retrievals'''

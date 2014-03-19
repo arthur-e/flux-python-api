@@ -77,17 +77,14 @@ class TransformationInterface:
         self.config.update(kwargs)
 
         # Set as attributes all of the configuration values
-        for config in self.config:
+        for config in self.config.keys():
             setattr(self, config, self.config.get(config))
 
-    def __open__(self, path):
+    def __open__(self, path, var_name=None):
         # HDF5/Matlab file interface
         self.file = self.file_handler(path)
 
-        if self.timestamp is None:
-            raise AttributeError('One or more required configuration parameters were not provided')
-
-        if self.var_name is None:
+        if self.var_name is None and var_name is None:
             self.var_name = [
                 k for k in self.file.keys() if self.var_regex.match(k) is not None
             ][0] # Grab the first variable name that isn't __private__
@@ -117,6 +114,7 @@ class SpatioTemporalMatrix(TransformationInterface):
     interval = 10800 # 3 hours in seconds
     parameters = ['value', 'error']
     units = ['degrees', 'degrees']
+    range = None
     timestamp = None
     transforms = {}
     var_name = None
@@ -139,6 +137,9 @@ class InvertedSurfaceFlux(SpatioTemporalMatrix):
 
     def extract(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
+        if self.timestamp is None:
+            raise AttributeError('One or more required configuration parameters were not provided')
+
         # Allow overrides through optional keyword arguments in extract()
         self.__configure__(**kwargs)
 
@@ -204,6 +205,9 @@ class XCO2Matrix(TransformationInterface):
 
     def extract(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
+        if self.timestamp is None:
+            raise AttributeError('One or more required configuration parameters were not provided')
+
         # Allow overrides through optional keyword arguments in extract()
         self.__configure__(**kwargs)
         
@@ -265,6 +269,9 @@ class KrigedXCO2Matrix(XCO2Matrix):
     
     def extract(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
+        if self.timestamp is None:
+            raise AttributeError('One or more required configuration parameters were not provided')
+
         # Allow overrides through optional keyword arguments in extract()
         self.__configure__(**kwargs)
 
