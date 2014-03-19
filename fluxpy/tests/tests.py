@@ -50,7 +50,7 @@ class TestInvertedSurfaceFluxes(unittest.TestCase):
 
         df = flux.extract()
         self.assertEqual(df.shape, (10, 8))
-        self.assertEqual(df.columns[1], '2004-06-30T03:00:00')
+        self.assertEqual(str(df.columns[1]), '2004-06-30 03:00:00')
         self.assertEqual(df.index.values[1], (-165.5, 61.5))
 
     def test_save_to_db(self):
@@ -58,11 +58,7 @@ class TestInvertedSurfaceFluxes(unittest.TestCase):
         flux = InvertedSurfaceFlux(os.path.join(self.path, 'casagfed2004.mat'),
             timestamp='2004-06-30T00:00:00', var_name='test')
 
-        self.mediator.add(flux)
-        self.assertEqual(len(self.mediator.instances), 1)
-        
-        self.mediator.save_to_db('test3')
-
+        self.mediator.save('test3', flux)
         query = self.mediator.client[self.mediator.db_name]['test3'].find({
             '_id': datetime.datetime(2004, 6, 30, 0, 0, 0),
         })
@@ -106,10 +102,7 @@ class TestXCO2Data(unittest.TestCase):
         xco2 = XCO2Matrix(os.path.join(self.path, 'xco2.mat'),
             timestamp='2009-06-15')
 
-        self.mediator.add(xco2)
-        self.assertEqual(len(self.mediator.instances), 1)
-        
-        self.mediator.save_to_db('test')
+        self.mediator.save('test', xco2)
         query = self.mediator.client[self.mediator.db_name]['test'].find({
             'timestamp': datetime.datetime(2009, 6, 16, 0, 0, 0),
         })
@@ -152,11 +145,7 @@ class TestKrigedXCO2Data(unittest.TestCase):
         xco2 = KrigedXCO2Matrix(os.path.join(self.path, 'kriged_xco2.mat'),
             timestamp='2009-06-15')
 
-        self.mediator.add(xco2)
-        self.assertEqual(len(self.mediator.instances), 1)
-        
-        self.mediator.save_to_db('test2')
-
+        self.mediator.save('test2', xco2)
         query = self.mediator.client[self.mediator.db_name]['test2'].find({
             '_id': datetime.datetime(2009, 6, 15, 0, 0, 0),
         })

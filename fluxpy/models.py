@@ -38,6 +38,13 @@ import numpy as np
 import scipy.io
 import h5py
 from dateutil.relativedelta import *
+from shapely.geometry import MultiPoint
+
+try:
+    from hashlib import md5
+
+except ImportError:
+    import md5
 
 class TransformationInterface(object):
     '''
@@ -108,9 +115,10 @@ class SpatioTemporalMatrix(TransformationInterface):
             'x': '%.5f',
             'y': '%.5f'
         }
-        self.geometry = {
-            'isCollection': False,
-            'type': 'Point'
+        self.resolution = { # Mutually exclusive with the "geometry" key
+            'units': 'degrees',
+            'x_length': 0.5, # Grid cell resolution in the x direction
+            'y_length': 0.5, # Grid cell resolution in the y direction
         }
         self.header = ['lng', 'lat']
         self.interval = 10800 # 3 hours in seconds
@@ -139,6 +147,26 @@ class InvertedSurfaceFlux(SpatioTemporalMatrix):
 		    0.08, ...
     '''
 
+    def describe(self, df=None, **kwargs):
+        if df is None:
+            df = self.extract(**kwargs)
+
+        bounds = MultiPoint(list(df.index.values)).bounds
+        dates = pd.date_range(self.timestamp, periods=df.shape[1],
+            freq='%dS' % self.interval)
+
+        self.__metadata__ = {
+            'dates': map(lambda t: t.strftime('%Y-%m-%dT%H:%M:%S'),
+                [dates[0], dates[-1]]),
+            'intervals': [self.interval],
+            'gridded': True,
+            'bbox': bounds,
+            'bboxmd5': md5(str(bounds)).hexdigest(),
+            'gridres': self.resolution
+        }
+
+        return self.__metadata__
+
     def extract(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
         if self.timestamp is None:
@@ -147,13 +175,18 @@ class InvertedSurfaceFlux(SpatioTemporalMatrix):
         # Allow overrides through optional keyword arguments in extract()
         self.__configure__(**kwargs)
 
-        dt = datetime.datetime.strptime(self.timestamp, '%Y-%m-%dT%H:%M:%S')
+        # Create the column headers as a time series
         intervals = self.file[self.var_name].shape[1] - len(self.columns)
         cols = list(self.columns)
-        cols.extend([
-            datetime.datetime.strftime(dt + relativedelta(seconds=int(self.interval*j)),
-                '%Y-%m-%dT%H:%M:%S') for j in range(intervals)
-        ])
+        cols.extend(pd.date_range(self.timestamp, periods=intervals,
+            freq='%dS' % self.interval))
+
+        # Alternatively; for column names as strings:
+        # dt = datetime.datetime.strptime(self.timestamp, '%Y-%m-%dT%H:%M:%S')
+        # cols.extend([
+        #     datetime.datetime.strftime(dt + relativedelta(seconds=int(self.interval*j)),
+        #         '%Y-%m-%dT%H:%M:%S') for j in range(intervals)
+        # ])
 
         # Data frame
         try:
@@ -175,7 +208,22 @@ class InvertedSurfaceFlux(SpatioTemporalMatrix):
         # Capture a new DataFrame with a MultiIndex; promotes these columns to indexes
         dfm = df.set_index(self.columns)
 
+        # Create metadata
+        self.describe(dfm)
+
         return dfm
+
+    def summarize(self, df=None, **kwargs):
+        if df is None:
+            df = self.extract(**kwargs)
+
+        return { # Axis 0 is the "row-wise" axis
+            'mean': df.mean(0).mean(),
+            'min': df.min(0).min(),
+            'max': df.max(0).max(),
+            'std': df.std(0).std(),
+            'median': df.median(0).median()
+        }
 
 
 class XCO2Matrix(TransformationInterface):

@@ -15,7 +15,14 @@ import sys
 import pandas as pd
 import numpy as np
 from pymongo import MongoClient
+from shapely.geometry import Polygon
 from fluxpy import DB, DEFAULT_PATH, RESERVED_COLLECTION_NAMES
+
+try:
+    from hashlib import md5
+
+except ImportError:
+    import md5
 
 class Mediator(object):
     '''
@@ -28,19 +35,21 @@ class Mediator(object):
     def __init__(self, client=None, db_name=DB):
         self.client = client or MongoClient() # The MongoDB client; defaults: MongoClient('localhost', 27017)
         self.db_name = db_name # The name of the MongoDB database
-        self.instances = [] # Stored model instances
 
-    #TODO Perhaps refactor: add(self, collection_name, *args) ... self.instances.append((collection_name, each))
-    def add(self, *args, **kwargs):
-        '''Add model instances; set optional configuration overrides for all instances added'''
-        for each in args:
-            for key, value in kwargs.items():
-                each.config[key] = value
-                
-            self.instances.append(each)
+    def __union_bounds__(self, *boundings):
+        total_bounds = Polygon()
 
-        return self
-        
+        for bounds in boundings:
+            poly_bounds = Polygon([
+                (bounds[0], bounds[1]),
+                (bounds[2], bounds[1]),
+                (bounds[2], bounds[0]),
+                (bounds[0], bounds[0])
+            ])
+            total_bounds = poly_bounds.union(total_bounds)
+
+        return total_bounds.bounds()
+
     def parse_timestamp(self, timestamp):
         '''Parses an ISO 8601 timestamp'''
         try:
@@ -49,21 +58,10 @@ class Mediator(object):
         except ValueError:
             return datetime.datetime.strptime(timestamp, '%Y-%m-%d')
         
-    def save_to_db(self, collection_name):
+    def save(self, collection_name, instance):
         '''Transforms contents of Data Frame into JSON representation for MongoDB'''
         if collection_name in RESERVED_COLLECTION_NAMES:
             raise ValueError('The collection name provided is a reserved name')
-            
-    def update_summary_stats(self, model, collection_name, query={}):
-        '''Inserts or updates the summary stats document for a model-collection pair'''
-        
-        if self.client[self.db_name]['summary_stats'].find({
-            'about_collection': collection_name
-        }).count() > 0:
-            self.client[self.db_name]['summary_stats'].remove()
-            
-        self.client[self.db_name]['summary_stats'].insert(self.summarize(model,
-            collection_name, query))
 
 
 class Grid4DMediator(Mediator):
@@ -75,32 +73,90 @@ class Grid4DMediator(Mediator):
     '''
     values_precision = 2
 
-    def save_to_db(self, collection_name):
-        super(Grid4DMediator, self).save_to_db(collection_name)
+    def load(self, collection_name, query):
+        # Retrieve a cursor to iterate over the records matching the query
+        cursor = self.client[self.db_name][collection_name].find(query, {
+            'values': 1,
+        })
+        
+        # Create an n x 2 matrix of the longitude-latitude coordinates
+        coords = np.array(self.client[self.db_name]['coord_index'].find({
+            '_id': collection_name
+        }).next()['i'])
+        
+        # Create a DataFrame of longitude-latitude coordinates
+        coords = pd.DataFrame(coords, columns=('x', 'y'))
 
-        for inst in self.instances:
-            df = inst.extract()
+        series = []
+        ids = []
 
-            # Create the index of grid cell coordinates, if needed
-            if self.client[self.db_name]['coord_index'].find({
+        for record in cursor:
+            values = pd.Series(record['values'], dtype='float64', name=record['_id'])
+            series.append(values)
+            ids.append(record.get('_id'))
+
+        df = pd.concat([
+            coords,
+            pd.concat(series, axis=1)
+        ], axis=1)
+
+        # Capture a new DataFrame with a MultiIndex; promotes these columns to indexes
+        dfm = df.set_index(['x', 'y'])
+
+        return dfm
+
+    def save(self, collection_name, instance):
+        super(Grid4DMediator, self).save(collection_name, instance)
+
+        df = instance.extract()
+
+        # Create the index of grid cell coordinates, if needed
+        if self.client[self.db_name]['coord_index'].find({
+            '_id': collection_name
+        }).count() == 0:
+            k = self.client[self.db_name]['coord_index'].insert({
+                '_id': collection_name,
+                'i': list(df.index.values)
+            })
+
+        # Iterate over the transpose of the data frame
+        for timestamp, series in df.T.iterrows():
+            j = self.client[self.db_name][collection_name].insert({
+                '_id': timestamp,
+                'values': [
+                    round(kv[1], self.values_precision) for kv in series.iterkv()
+                ]
+            })
+
+        # Get the metadata; assume they are all the same
+        metadata = instance.describe(df)
+
+        # Include the summary statistics
+        metadata.update(instance.summarize(df))
+
+        if self.client[self.db_name]['metadata'].find({
+            '_id': collection_name
+        }).count() == 0:
+            self.client[self.db_name]['metadata'].insert(metadata)
+
+        else:
+            last_metadata = query.next()
+
+            #TODO Update the dates, intervals
+
+            # Calculate the union of the old and new bounds
+            new_bounds = self.__union_bounds__(last_metadata['bounds'],
+                metadata['bounds'])
+
+            # Update the metadata
+            self.client[self.db_name]['metadata'].update({
                 '_id': collection_name
-            }) is None:
-                k = self.client[self.db_name]['coord_index'].insert({
-                    '_id': collection_name,
-                    'i': list(df.index.values)
-                })
-
-            # Iterate over the transpose of the data frame
-            for timestamp, series in df.T.iterrows():
-                j = self.client[self.db_name][collection_name].insert({
-                    '_id': datetime.datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S'),
-                    'values': [
-                        round(kv[1], self.values_precision) for kv in series.iterkv()
-                    ]
-                })
-
-        # Clear out any saved instances
-        self.instances = []
+            }, {
+                '$set': {
+                    'bbox': new_bounds,
+                    'bboxmd5': md5(new_bounds).hexdigest()
+                }
+            })
 
 
 class Grid3DMediator(Mediator):
@@ -111,8 +167,7 @@ class Grid3DMediator(Mediator):
     Additional fields beyond the "value" field may be included; currently
     supported is the additional "error" field.
     '''
-    def load_from_db(self, collection_name, query={}):
-        
+    def load(self, collection_name, query={}):
         # Retrieve a cursor to iterate over the records matching the query
         cursor = self.client[self.db_name][collection_name].find(query, {
             'values': 1,
@@ -148,39 +203,36 @@ class Grid3DMediator(Mediator):
 
         return dict(zip(ids, frames))
 
-    def save_to_db(self, collection_name):
-        super(Grid3DMediator, self).save_to_db(collection_name)
+    def save(self, collection_name, instance):
+        super(Grid3DMediator, self).save(collection_name, instance)
 
-        for inst in self.instances:
-            df = inst.extract()
+        df = instance.extract()
 
-            # Expect that a valid timestamp was provided
-            if inst.timestamp is None:
-                raise AttributeError('Expected a model to have a "timestamp" parameter; is this the right model for this Mediator?')
+        # Expect that a valid timestamp was provided
+        if instance.timestamp is None:
+            raise AttributeError('Expected a model to have a "timestamp" parameter; is this the right model for this Mediator?')
 
-            # Create the index of grid cell coordinates, if needed
-            if self.client[self.db_name]['coord_index'].find({
-                '_id': collection_name
-            }) is None:
-                i = self.client[self.db_name]['coord_index'].insert({
-                    '_id': collection_name,
-                    'i': [i for i in df.apply(lambda c: [c['x'], c['y']], 1)]
-                })
+        # Create the index of grid cell coordinates, if needed
+        if self.client[self.db_name]['coord_index'].find({
+            '_id': collection_name
+        }) is None:
+            i = self.client[self.db_name]['coord_index'].insert({
+                '_id': collection_name,
+                'i': [i for i in df.apply(lambda c: [c['x'], c['y']], 1)]
+            })
 
-            # Create the data document itself
-            data_dict = {
-                '_id': self.parse_timestamp(inst.timestamp),
-                '_range': int(inst.range) or None
-            }
+        # Create the data document itself
+        data_dict = {
+            '_id': self.parse_timestamp(instance.timestamp),
+            '_range': int(instance.range) or None
+        }
+        
+        for param in instance.parameters:
+            data_dict[param] = df[param].tolist()
             
-            for param in inst.parameters:
-                data_dict[param] = df[param].tolist()
-                
-            j = self.client[self.db_name][collection_name].insert(data_dict)
+        j = self.client[self.db_name][collection_name].insert(data_dict)
 
-        # Clear out any saved instances
-        self.instances = []
-
+    #TODO Migrate this to the model
     def summarize(self, model, collection_name, query={}):
         dfs = self.load_from_db(collection_name, query)
         
@@ -211,32 +263,31 @@ class Unstructured3DMediator(Mediator):
     value dimension (3D).
     '''
     
-    def save_to_db(self, collection_name):
-        super(Unstructured3DMediator, self).save_to_db(collection_name)
+    def save(self, collection_name, instance):
+        super(Unstructured3DMediator, self).save(collection_name, instance)
 
-        for inst in self.instances:
-            df = inst.extract()
+        df = instance.extract()
+        
+        features = []
+        for i, series in df.iterrows():
+            features.append({
+                'coordinates': [
+                    series['x'],
+                    series['y']
+                ],
+                'value': series['value'],
+                'error': series['error'],
+                'timestamp': series['timestamp']
+            })
+
+        if instance.geometry.get('isCollection'):                
+            j = self.client[self.db_name][collection_name].insert({
+                'features': features
+            })
             
-            features = []
-            for i, series in df.iterrows():
-                features.append({
-                    'coordinates': [
-                        series['x'],
-                        series['y']
-                    ],
-                    'value': series['value'],
-                    'error': series['error'],
-                    'timestamp': series['timestamp']
-                })
-
-            if inst.geometry.get('isCollection'):                
-                j = self.client[self.db_name][collection_name].insert({
-                    'features': features
-                })
-                
-            else:
-                for feature in features:
-                    j = self.client[self.db_name][collection_name].insert(feature)
+        else:
+            for feature in features:
+                j = self.client[self.db_name][collection_name].insert(feature)
 
 
 
