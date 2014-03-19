@@ -141,22 +141,45 @@ class Grid4DMediator(Mediator):
 
         else:
             last_metadata = query.next()
+            update_selection = {}
 
-            #TODO Update the dates, intervals
+            # Check if the last date and the first new data are the same...
+            if last_metadata['dates'][-1] != metadata['dates'][0]:
+                new_dates = list(last_metadata['dates'])
+                new_dates.extend(metadata['dates'])
 
-            # Calculate the union of the old and new bounds
-            new_bounds = self.__union_bounds__(last_metadata['bounds'],
-                metadata['bounds'])
+                update_selection.update({
+                    'dates': new_dates
+                })
 
-            # Update the metadata
-            self.client[self.db_name]['metadata'].update({
-                '_id': collection_name
-            }, {
-                '$set': {
+            # Check if the last interval and the first new interval are the same...
+            if last_metadata['intervals'][-1] != metadata['intervals'][0]:
+                new_intervals = list(last_metadata['intervals'])
+                new_intervals.extend(metadata['intervals'])
+
+                update_selection.update({
+                    'intervals': new_intervals
+                })
+
+            # Check to see if the bounding box has changed...
+            if last_metadata['bboxmd5'] != metadata['bboxmd5']:
+                # Calculate the union of the old and new bounds
+                new_bounds = self.__union_bounds__(last_metadata['bounds'],
+                    metadata['bounds'])
+
+                update_selection.update({
                     'bbox': new_bounds,
                     'bboxmd5': md5(new_bounds).hexdigest()
-                }
-            })
+                })
+
+            # If anything's changed, update the database!
+            if len(update_selection.items()) != 0:
+                # Update the metadata
+                self.client[self.db_name]['metadata'].update({
+                    '_id': collection_name
+                }, {
+                    '$set': update_selection
+                })
 
 
 class Grid3DMediator(Mediator):

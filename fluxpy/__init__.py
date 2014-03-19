@@ -29,5 +29,6 @@ DB = 'fluxvis'
 DEFAULT_PATH = '/ws4/idata/fluxvis/casa_gfed_inversion_results/'
 RESERVED_COLLECTION_NAMES = (
     'coord_index',
+    'metadata',
     'summary_stats'
 )
