@@ -8,10 +8,10 @@ import h5py
 from lxml import etree
 from fluxpy.legacy.transform import bulk_hdf5_to_csv
 from fluxpy.mediators import Grid4DMediator, Grid3DMediator, Unstructured3DMediator
-from fluxpy.models import KrigedXCO2Matrix, XCO2Matrix, SpatioTemporalMatrix, InvertedSurfaceFlux
+from fluxpy.models import KrigedXCO2Matrix, XCO2Matrix, SpatioTemporalMatrix, KrigedInversion
 from fluxpy.colors import DivergingColors
 
-class TestInvertedSurfaceFluxes(unittest.TestCase):
+class TestKrigedInversiones(unittest.TestCase):
     '''Tests for proper handling of inverted CO2 surface fluxes (e.g. CASA GFED output)'''
 
     mediator = Grid4DMediator()
@@ -28,8 +28,8 @@ class TestInvertedSurfaceFluxes(unittest.TestCase):
         self.assertEqual(flux.timestamp, '2004-01-01T00:00:00')
 
     def test_model_instance(self):
-        '''Should properly instantiate an InvertedSurfaceFlux model instance'''
-        flux = InvertedSurfaceFlux(os.path.join(self.path, 'casagfed2004.mat'),
+        '''Should properly instantiate an KrigedInversion model instance'''
+        flux = KrigedInversion(os.path.join(self.path, 'casagfed2004.mat'),
             timestamp='2004-06-30T00:00:00', var_name='test', range=10800)
 
         self.assertEqual(flux.var_name, 'test')
@@ -38,14 +38,14 @@ class TestInvertedSurfaceFluxes(unittest.TestCase):
         self.assertEqual(flux.timestamp, '2004-06-30T00:00:00')
 
     def test_model_var_name_inference(self):
-        '''Should infer the var_name in an InvertedSurfaceFlux model instance'''
-        flux = InvertedSurfaceFlux(os.path.join(self.path, 'casagfed2004.mat'))
+        '''Should infer the var_name in an KrigedInversion model instance'''
+        flux = KrigedInversion(os.path.join(self.path, 'casagfed2004.mat'))
 
         self.assertEqual(flux.var_name, 'test')
 
     def test_model_extract(self):
-        '''Should extract a DataFrame in an InvertedSurfaceFlux model instance'''
-        flux = InvertedSurfaceFlux(os.path.join(self.path, 'casagfed2004.mat'),
+        '''Should extract a DataFrame in an KrigedInversion model instance'''
+        flux = KrigedInversion(os.path.join(self.path, 'casagfed2004.mat'),
             timestamp='2004-06-30T00:00:00', var_name='test')
 
         df = flux.extract()
@@ -55,7 +55,7 @@ class TestInvertedSurfaceFluxes(unittest.TestCase):
 
     def test_save_to_db(self):
         '''Should successfully save proper data representation to database'''
-        flux = InvertedSurfaceFlux(os.path.join(self.path, 'casagfed2004.mat'),
+        flux = KrigedInversion(os.path.join(self.path, 'casagfed2004.mat'),
             timestamp='2004-06-30T00:00:00', var_name='test')
 
         self.mediator.save('test3', flux)

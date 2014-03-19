@@ -131,22 +131,6 @@ class SpatioTemporalMatrix(TransformationInterface):
 
         super(SpatioTemporalMatrix, self).__init__(path, *args, **kwargs)
 
-
-class InvertedSurfaceFlux(SpatioTemporalMatrix):
-    '''
-    Input (lng, lat, flux at t1, flux at t2, ...)
-    -166.50   65.500   8.0282e-02 ...
-    -165.50   61.500   1.5991e-01 ...
-    -165.50   65.500   1.0994e-01 ...
-        ...      ...          ...
-
-    Output:
-    {
-	    "_id" : ISODate("2003-12-22T03:00:00Z"),
-	    "values" : [
-		    0.08, ...
-    '''
-
     def describe(self, df=None, **kwargs):
         if df is None:
             df = self.extract(**kwargs)
@@ -166,6 +150,36 @@ class InvertedSurfaceFlux(SpatioTemporalMatrix):
         }
 
         return self.__metadata__
+
+    def summarize(self, df=None, **kwargs):
+        if df is None:
+            df = self.extract(**kwargs)
+
+        return { # Axis 0 is the "row-wise" axis
+            'mean': df.mean(0).mean(),
+            'min': df.min(0).min(),
+            'max': df.max(0).max(),
+            'std': df.std(0).std(),
+            'median': df.median(0).median()
+        }
+
+
+class KrigedInversion(SpatioTemporalMatrix):
+    '''
+    Understands inverted (i.e. gridded) spatiotemporal observations at the Earth's
+    surface e.g. inverse carbon fluxes.
+
+    Input (lng, lat, flux at t1, flux at t2, ...)
+    -166.50   65.500   8.0282e-02 ...
+    -165.50   61.500   1.5991e-01 ...
+        ...      ...          ...
+
+    Output:
+    {
+	    "_id" : ISODate("2003-12-22T03:00:00Z"),
+	    "values" : [
+		    0.08, ...
+    '''
 
     def extract(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
@@ -212,18 +226,6 @@ class InvertedSurfaceFlux(SpatioTemporalMatrix):
         self.describe(dfm)
 
         return dfm
-
-    def summarize(self, df=None, **kwargs):
-        if df is None:
-            df = self.extract(**kwargs)
-
-        return { # Axis 0 is the "row-wise" axis
-            'mean': df.mean(0).mean(),
-            'min': df.min(0).min(),
-            'max': df.max(0).max(),
-            'std': df.std(0).std(),
-            'median': df.median(0).median()
-        }
 
 
 class XCO2Matrix(TransformationInterface):
