@@ -8,7 +8,10 @@ xco2 = KrigedXCO2Matrix('xco2_data.mat', timestamp='2009-06-15')
 mediator.add(xco2).save_to_db('my_xco2_data')
 '''
 
-import datetime, os, sys, re
+import datetime
+import os
+import re
+import sys
 import pandas as pd
 import numpy as np
 from pymongo import MongoClient
@@ -114,7 +117,7 @@ class Grid3DMediator(Mediator):
             df = inst.extract()
 
             # Expect that a valid timestamp was provided
-            timestamp = inst.config.get('timestamp')
+            timestamp = inst.timestamp
             if timestamp is None:
                 raise AttributeError('Expected a model to have a "timestamp" parameter; is this the right model for this Mediator?')
 
@@ -130,10 +133,10 @@ class Grid3DMediator(Mediator):
             # Create the data document itself
             data_dict = {
                 '_id': self.parse_timestamp(timestamp),
-                '_range': int(inst.config.get('range')) or None
+                '_range': int(inst.range) or None
             }
             
-            for param in inst.config.get('parameters'):
+            for param in inst.parameters:
                 data_dict[param] = df[param].tolist()
                 
             j = self.client[self.db_name][collection_name].insert(data_dict)
@@ -151,7 +154,7 @@ class Grid3DMediator(Mediator):
             '_id': collection_name
         }
         
-        for param in model.defaults.get('parameters'):
+        for param in model.parameters:
             # Axis 0 is the "row-wise" axis
             summary[param] = {
                 'mean': df.mean(0)[param],
@@ -189,7 +192,7 @@ class Unstructured3DMediator(Mediator):
                     'timestamp': series['timestamp']
                 })
 
-            if inst.config.get('geometry').get('isCollection'):                
+            if inst.geometry.get('isCollection'):                
                 j = self.client[self.db_name][collection_name].insert({
                     'features': features
                 })
