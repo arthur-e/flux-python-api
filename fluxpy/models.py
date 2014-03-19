@@ -82,13 +82,13 @@ class TransformationInterface(object):
             setattr(self, config, self.config.get(config))
 
     def __open__(self, path, var_name=None):
-        # HDF5/Matlab file interface
-        self.file = self.file_handler(path)
+        self.file = self.file_handler(path) # HDF5/Matlab file interface
 
+        # Infer var_name; grab the first variable name that isn't __private__
         if var_name is None and getattr(self, 'var_name', None) is None:
             self.var_name = [
                 k for k in self.file.keys() if self.var_regex.match(k) is not None
-            ][0] # Grab the first variable name that isn't __private__
+            ][0]
 
     def dump(self, data):
         pass

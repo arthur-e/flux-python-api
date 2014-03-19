@@ -1,4 +1,3 @@
-import ipdb#FIXME
 import csv
 import datetime
 import os
@@ -31,11 +30,47 @@ class TestInvertedSurfaceFluxes(unittest.TestCase):
     def test_model_instance(self):
         '''Should properly instantiate an InvertedSurfaceFlux model instance'''
         flux = InvertedSurfaceFlux(os.path.join(self.path, 'casagfed2004.mat'),
-            timestamp='2004-06-30T00:00:00')
+            timestamp='2004-06-30T00:00:00', var_name='test', range=10800)
 
         self.assertEqual(flux.var_name, 'test')
         self.assertEqual(flux.interval, 10800)
+        self.assertEqual(flux.range, 10800)
         self.assertEqual(flux.timestamp, '2004-06-30T00:00:00')
+
+    def test_model_var_name_inference(self):
+        '''Should infer the var_name in an InvertedSurfaceFlux model instance'''
+        flux = InvertedSurfaceFlux(os.path.join(self.path, 'casagfed2004.mat'))
+
+        self.assertEqual(flux.var_name, 'test')
+
+    def test_model_extract(self):
+        '''Should extract a DataFrame in an InvertedSurfaceFlux model instance'''
+        flux = InvertedSurfaceFlux(os.path.join(self.path, 'casagfed2004.mat'),
+            timestamp='2004-06-30T00:00:00', var_name='test')
+
+        df = flux.extract()
+        self.assertEqual(df.shape, (10, 8))
+        self.assertEqual(df.columns[1], '2004-06-30T03:00:00')
+        self.assertEqual(df.index.values[1], (-165.5, 61.5))
+
+    def test_save_to_db(self):
+        '''Should successfully save proper data representation to database'''
+        flux = InvertedSurfaceFlux(os.path.join(self.path, 'casagfed2004.mat'),
+            timestamp='2004-06-30T00:00:00', var_name='test')
+
+        self.mediator.add(flux)
+        self.assertEqual(len(self.mediator.instances), 1)
+        
+        self.mediator.save_to_db('test3')
+
+        query = self.mediator.client[self.mediator.db_name]['test3'].find({
+            '_id': datetime.datetime(2004, 6, 30, 0, 0, 0),
+        })
+        self.assertEqual(len(query[0]['values']), 10)
+        self.assertEqual(query[0]['values'][0], 0.08)
+
+        # Drop the old collection; it will be recreated when inserting
+        self.mediator.client[self.mediator.db_name].drop_collection('test3')
 
 
 class TestXCO2Data(unittest.TestCase):
@@ -54,7 +89,7 @@ class TestXCO2Data(unittest.TestCase):
         self.assertEqual(xco2.range, None)
         self.assertEqual(xco2.timestamp, '2009-06-15')
         
-    def test_model_save(self):
+    def test_model_extract(self):
         '''Should create proper DataFrame from reading file data'''
         xco2 = XCO2Matrix(os.path.join(self.path, 'xco2.mat'),
             timestamp='2009-06-15')
@@ -71,13 +106,17 @@ class TestXCO2Data(unittest.TestCase):
         xco2 = XCO2Matrix(os.path.join(self.path, 'xco2.mat'),
             timestamp='2009-06-15')
 
-        # Drop the old collection; it will be recreated when inserting
-        self.mediator.client[self.mediator.db_name].drop_collection('test')
-        
         self.mediator.add(xco2)
         self.assertEqual(len(self.mediator.instances), 1)
         
-        #TODO self.mediator.save_to_db('test')
+        self.mediator.save_to_db('test')
+        query = self.mediator.client[self.mediator.db_name]['test'].find({
+            'timestamp': datetime.datetime(2009, 6, 16, 0, 0, 0),
+        })
+        self.assertEqual(query[0]['value'], 386.79)
+
+        # Drop the old collection; it will be recreated when inserting
+        self.mediator.client[self.mediator.db_name].drop_collection('test')
         
 
 class TestKrigedXCO2Data(unittest.TestCase):
@@ -96,7 +135,7 @@ class TestKrigedXCO2Data(unittest.TestCase):
         self.assertEqual(xco2.range, 518400)
         self.assertEqual(xco2.timestamp, '2009-06-15')
         
-    def test_model_save(self):
+    def test_model_extract(self):
         '''Should create proper DataFrame from reading file data'''
         xco2 = KrigedXCO2Matrix(os.path.join(self.path, 'kriged_xco2.mat'),
             timestamp='2009-06-15')
@@ -113,13 +152,19 @@ class TestKrigedXCO2Data(unittest.TestCase):
         xco2 = KrigedXCO2Matrix(os.path.join(self.path, 'kriged_xco2.mat'),
             timestamp='2009-06-15')
 
-        # Drop the old collection; it will be recreated when inserting
-        self.mediator.client[self.mediator.db_name].drop_collection('test')
-        
         self.mediator.add(xco2)
         self.assertEqual(len(self.mediator.instances), 1)
         
-        #TODO self.mediator.save_to_db('test')
+        self.mediator.save_to_db('test2')
+
+        query = self.mediator.client[self.mediator.db_name]['test2'].find({
+            '_id': datetime.datetime(2009, 6, 15, 0, 0, 0),
+        })
+        self.assertEqual(query[0]['_range'], 518400)
+        self.assertEqual(len(query[0]['values']), 14210)
+
+        # Drop the old collection; it will be recreated when inserting
+        self.mediator.client[self.mediator.db_name].drop_collection('test2')
 
 
 class TestColors(unittest.TestCase):
