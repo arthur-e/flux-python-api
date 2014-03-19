@@ -27,7 +27,6 @@ Example JSON configuration file for a model:
 }
 '''
 
-import ipdb#FIXME
 import datetime
 import json
 import math
@@ -140,11 +139,16 @@ class InvertedSurfaceFlux(SpatioTemporalMatrix):
 
     def extract(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
+        # Allow overrides through optional keyword arguments in extract()
+        self.__configure__(**kwargs)
 
         dt = datetime.datetime.strptime(self.timestamp, '%Y-%m-%dT%H:%M:%S')
         intervals = self.file[self.var_name].shape[1] - len(self.columns)
         cols = list(self.columns)
-        cols.extend([str(dt + relativedelta(seconds=+(self.interval*j))) for j in range(intervals)])
+        cols.extend([
+            datetime.datetime.strftime(dt + relativedelta(seconds=int(self.interval*j)),
+                '%Y-%m-%dT%H:%M:%S') for j in range(intervals)
+        ])
 
         # Data frame
         try:
@@ -200,7 +204,6 @@ class XCO2Matrix(TransformationInterface):
 
     def extract(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
-
         # Allow overrides through optional keyword arguments in extract()
         self.__configure__(**kwargs)
         
@@ -262,7 +265,6 @@ class KrigedXCO2Matrix(XCO2Matrix):
     
     def extract(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
-
         # Allow overrides through optional keyword arguments in extract()
         self.__configure__(**kwargs)
 

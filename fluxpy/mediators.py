@@ -29,7 +29,8 @@ class Mediator(object):
         self.client = client or MongoClient() # The MongoDB client; defaults: MongoClient('localhost', 27017)
         self.db_name = db_name # The name of the MongoDB database
         self.instances = [] # Stored model instances
-        
+
+    #TODO Perhaps refactor: add(self, collection_name, *args) ... self.instances.append((collection_name, each))
     def add(self, *args, **kwargs):
         '''Add model instances; set optional configuration overrides for all instances added'''
         for each in args:
@@ -63,6 +64,43 @@ class Mediator(object):
             
         self.client[self.db_name]['summary_stats'].insert(self.summarize(model,
             collection_name, query))
+
+
+class Grid4DMediator(Mediator):
+    '''
+    Mediator that understands spatial data on a structured, longitude-latitude
+    grid that vary in time; two spatial dimensions and an aribtrary number of
+    time steps (frames). Geometry expected as grid centroids (e.g. centroids
+    of 1-degree grid cells).
+    '''
+    values_precision = 2
+
+    def save_to_db(self, collection_name):
+        super(Grid4DMediator, self).save_to_db(collection_name)
+
+        for inst in self.instances:
+            df = inst.extract()
+
+            # Create the index of grid cell coordinates, if needed
+            if self.client[self.db_name]['coord_index'].find({
+                '_id': collection_name
+            }) is None:
+                k = self.client[self.db_name]['coord_index'].insert({
+                    '_id': collection_name,
+                    'i': list(df.index.values)
+                })
+
+            # Iterate over the transpose of the data frame
+            for timestamp, series in df.T.iterrows():
+                j = self.client[self.db_name][collection_name].insert({
+                    '_id': datetime.datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S'),
+                    'values': [
+                        round(kv[1], self.values_precision) for kv in series.iterkv()
+                    ]
+                })
+
+        # Clear out any saved instances
+        self.instances = []
 
 
 class Grid3DMediator(Mediator):
@@ -117,8 +155,7 @@ class Grid3DMediator(Mediator):
             df = inst.extract()
 
             # Expect that a valid timestamp was provided
-            timestamp = inst.timestamp
-            if timestamp is None:
+            if inst.timestamp is None:
                 raise AttributeError('Expected a model to have a "timestamp" parameter; is this the right model for this Mediator?')
 
             # Create the index of grid cell coordinates, if needed
@@ -132,7 +169,7 @@ class Grid3DMediator(Mediator):
 
             # Create the data document itself
             data_dict = {
-                '_id': self.parse_timestamp(timestamp),
+                '_id': self.parse_timestamp(inst.timestamp),
                 '_range': int(inst.range) or None
             }
             
