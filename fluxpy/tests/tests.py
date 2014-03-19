@@ -1,4 +1,4 @@
-import ipdb
+import ipdb#FIXME
 import csv
 import datetime
 import os
@@ -9,7 +9,7 @@ import h5py
 from lxml import etree
 from fluxpy.legacy.transform import bulk_hdf5_to_csv
 from fluxpy.mediators import Grid4DMediator, Grid3DMediator, Unstructured3DMediator
-from fluxpy.models import KrigedXCO2Matrix, XCO2Matrix, InvertedSurfaceFlux
+from fluxpy.models import KrigedXCO2Matrix, XCO2Matrix, SpatioTemporalMatrix, InvertedSurfaceFlux
 from fluxpy.colors import DivergingColors
 
 class TestInvertedSurfaceFluxes(unittest.TestCase):
@@ -20,8 +20,8 @@ class TestInvertedSurfaceFluxes(unittest.TestCase):
 
     def test_abstract_model_instance(self):
         '''Should properly instantiate a SpatioTemporalMatrix model instance'''
-        flux = InvertedSurfaceFlux(os.path.join(self.path, 'casagfed2004.mat'),
-            timestamp='2004-01-01T00:00:00')
+        flux = SpatioTemporalMatrix(os.path.join(self.path, 'casagfed2004.mat'),
+            timestamp='2004-01-01T00:00:00', var_name='test')
 
         self.assertEqual(flux.var_name, 'test')
         self.assertEqual(flux.interval, 10800)
@@ -31,10 +31,10 @@ class TestInvertedSurfaceFluxes(unittest.TestCase):
     def test_model_instance(self):
         '''Should properly instantiate an InvertedSurfaceFlux model instance'''
         flux = InvertedSurfaceFlux(os.path.join(self.path, 'casagfed2004.mat'),
-            timestamp='2004-06-30T00:00:00', interval='fubar')#FIXME
+            timestamp='2004-06-30T00:00:00')
 
         self.assertEqual(flux.var_name, 'test')
-        self.assertEqual(flux.interval, 'fubar')#FIXME
+        self.assertEqual(flux.interval, 10800)
         self.assertEqual(flux.timestamp, '2004-06-30T00:00:00')
 
 

@@ -39,7 +39,7 @@ import scipy.io
 import h5py
 from dateutil.relativedelta import *
 
-class TransformationInterface:
+class TransformationInterface(object):
     '''
     An abstract persistence transformation interface (modified from
     Andy Bulka, 2001), where extract() and dump() methods are defined in
@@ -48,11 +48,12 @@ class TransformationInterface:
     argument which is the interchange datum (a dictionary). A configuration
     file may be provided as a *.json file with the same name as the data file.
     '''
-    config = dict()
     path_regex = re.compile(r'.+\.(?P<extension>mat|h5)')
     var_regex = re.compile(r'^(?!__).*(?!__)$') # Skips __private__ variable names
 
-    def __init__(self, path, **kwargs):
+    def __init__(self, path, *args, **kwargs):
+        self.config = dict()
+
         if self.path_regex.match(path) is None:
             raise AttributeError('Only Matlab (*.mat) and HDF5 (*.h5 or *.mat) files are accepted')
 
@@ -66,13 +67,13 @@ class TransformationInterface:
         config = os.path.join('.'.join(path.split('.')[:-1]), '.json')
         if os.path.exists(config):
             self.config = json.load(open(config, 'rb'))
-            
+
         # Update and apply the configuration options as attributes
         self.__configure__(**kwargs)
 
         # Open the hierarchical file
         self.__open__(path)
-
+            
     def __configure__(self, **kwargs):
         self.config.update(kwargs)
 
@@ -84,7 +85,7 @@ class TransformationInterface:
         # HDF5/Matlab file interface
         self.file = self.file_handler(path)
 
-        if self.var_name is None and var_name is None:
+        if var_name is None and getattr(self, 'var_name', None) is None:
             self.var_name = [
                 k for k in self.file.keys() if self.var_regex.match(k) is not None
             ][0] # Grab the first variable name that isn't __private__
@@ -101,23 +102,26 @@ class SpatioTemporalMatrix(TransformationInterface):
     A generic matrix with two spatial dimensions in the first two columns and
     an arbitrary number of columns following each representing one step in time.
     '''
-    columns = ['x', 'y']
-    formats = {
-        'x': '%.5f',
-        'y': '%.5f'
-    }
-    geometry = {
-        'isCollection': False,
-        'type': 'Point'
-    }
-    header = ['lng', 'lat']
-    interval = 10800 # 3 hours in seconds
-    parameters = ['value', 'error']
-    units = ['degrees', 'degrees']
-    range = None
-    timestamp = None
-    transforms = {}
-    var_name = None
+    def __init__(self, path, *args, **kwargs):
+        self.columns = ['x', 'y']
+        self.formats = {
+            'x': '%.5f',
+            'y': '%.5f'
+        }
+        self.geometry = {
+            'isCollection': False,
+            'type': 'Point'
+        }
+        self.header = ['lng', 'lat']
+        self.interval = 10800 # 3 hours in seconds
+        self.parameters = ['value', 'error']
+        self.units = ['degrees', 'degrees']
+        self.range = None
+        self.timestamp = None
+        self.transforms = {}
+        self.var_name = None
+
+        super(SpatioTemporalMatrix, self).__init__(path, *args, **kwargs)
 
 
 class InvertedSurfaceFlux(SpatioTemporalMatrix):
@@ -182,23 +186,26 @@ class XCO2Matrix(TransformationInterface):
     Columns: Longitude, latitude, XCO2 concentration (ppm), day of the year,
     year, retrieval error (ppm).
     '''
-    columns = ['x', 'y', 'value', '%j', '%Y', 'error']
-    formats = {
-        'x': '%.5f',
-        'y': '%.5f',
-        'value': '%.2f',
-        'error': '%.4f'
-    }
-    geometry = {
-        'isCollection': False,
-        'type': 'Point'
-    }
-    header = ['lng', 'lat', 'xco2_ppm', 'day', 'year', 'error_ppm']
-    interval = 86400 # 1 day (daily) in seconds
-    parameters = ['value', 'error']
-    units = ['degrees', 'degrees', 'ppm', None, None, 'ppm^2']
-    var_name = 'XCO2'
-    range = None
+    def __init__(self, path, *args, **kwargs):
+        self.columns = ['x', 'y', 'value', '%j', '%Y', 'error']
+        self.formats = {
+            'x': '%.5f',
+            'y': '%.5f',
+            'value': '%.2f',
+            'error': '%.4f'
+        }
+        self.geometry = {
+            'isCollection': False,
+            'type': 'Point'
+        }
+        self.header = ['lng', 'lat', 'xco2_ppm', 'day', 'year', 'error_ppm']
+        self.interval = 86400 # 1 day (daily) in seconds
+        self.parameters = ['value', 'error']
+        self.units = ['degrees', 'degrees', 'ppm', None, None, 'ppm^2']
+        self.var_name = 'XCO2'
+        self.range = None
+
+        super(XCO2Matrix, self).__init__(path, *args, **kwargs)
 
     def dump(self, data):
         pass
@@ -238,34 +245,37 @@ class XCO2Matrix(TransformationInterface):
         return df
 
 
-class KrigedXCO2Matrix(XCO2Matrix):
+class KrigedXCO2Matrix(TransformationInterface):
     '''
     Understands Kriged XCO2 data as formatted--Typically 6-day spans of XCO2
     concentrations (ppm) at daily intervals on a latitude-longitude grid.
     Matrix dimensions: 14,210 (model cells) x 9 (attributes).
     Columns: Longitude, latitude, XCO2 concentration (ppm), retrieval error (ppm)
     '''
-    columns = ['y', 'x', 'values', 'errors', '4', '5', '6', '7', '8']
-    formats = {
-        'x': '%.5f',
-        'y': '%.5f',
-        'values': '%.2f',
-        'errors': '%.4f'
-    }
-    header = ['lat', 'lng', 'xco2_ppm', 'error_ppm^2', '', '', '', '', '']
-    interval = None
-    parameters = ['values', 'errors']
-    range = 518400 # 6 days in seconds
-    resolution = {
-        'x_length': 0.5,
-        'y_length': 0.5,
-        'units': 'degrees'
-    }
-    transforms = {
-        'errors': lambda x: math.sqrt(x)
-    }
-    units = ['degrees', 'degrees', 'ppm', 'ppm', None, None, None, None, None]
-    var_name = 'krigedData'
+    def __init__(self, path, *args, **kwargs):
+        self.columns = ['y', 'x', 'values', 'errors', '4', '5', '6', '7', '8']
+        self.formats = {
+            'x': '%.5f',
+            'y': '%.5f',
+            'values': '%.2f',
+            'errors': '%.4f'
+        }
+        self.header = ['lat', 'lng', 'xco2_ppm', 'error_ppm^2', '', '', '', '', '']
+        self.interval = None
+        self.parameters = ['values', 'errors']
+        self.range = 518400 # 6 days in seconds
+        self.resolution = {
+            'x_length': 0.5,
+            'y_length': 0.5,
+            'units': 'degrees'
+        }
+        self.transforms = {
+            'errors': lambda x: math.sqrt(x)
+        }
+        self.units = ['degrees', 'degrees', 'ppm', 'ppm', None, None, None, None, None]
+        self.var_name = 'krigedData'
+
+        super(KrigedXCO2Matrix, self).__init__(path, *args, **kwargs)
     
     def extract(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
