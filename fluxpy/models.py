@@ -117,8 +117,8 @@ class SpatioTemporalMatrix(TransformationInterface):
         }
         self.resolution = { # Mutually exclusive with the "geometry" key
             'units': 'degrees',
-            'x_length': 0.5, # Grid cell resolution in the x direction
-            'y_length': 0.5, # Grid cell resolution in the y direction
+            'x': 0.5, # Grid cell resolution in the x direction
+            'y': 0.5, # Grid cell resolution in the y direction
         }
         self.header = ['lng', 'lat']
         self.interval = 10800 # 3 hours in seconds

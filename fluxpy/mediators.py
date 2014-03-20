@@ -15,7 +15,6 @@ import sys
 import pandas as pd
 import numpy as np
 from pymongo import MongoClient
-from shapely.geometry import Polygon
 from fluxpy import DB, DEFAULT_PATH, RESERVED_COLLECTION_NAMES
 
 try:
@@ -35,20 +34,6 @@ class Mediator(object):
     def __init__(self, client=None, db_name=DB):
         self.client = client or MongoClient() # The MongoDB client; defaults: MongoClient('localhost', 27017)
         self.db_name = db_name # The name of the MongoDB database
-
-    def __union_bounds__(self, *boundings):
-        total_bounds = Polygon()
-
-        for bounds in boundings:
-            poly_bounds = Polygon([
-                (bounds[0], bounds[1]),
-                (bounds[2], bounds[1]),
-                (bounds[2], bounds[0]),
-                (bounds[0], bounds[0])
-            ])
-            total_bounds = poly_bounds.union(total_bounds)
-
-        return total_bounds.bounds()
 
     def parse_timestamp(self, timestamp):
         '''Parses an ISO 8601 timestamp'''
@@ -131,8 +116,9 @@ class Grid4DMediator(Mediator):
         # Get the metadata; assume they are all the same
         metadata = instance.describe(df)
 
-        # Include the summary statistics
-        metadata.update(instance.summarize(df))
+        # Set the unique identifier; include the summary statistics
+        metadata['_id'] = collection_name
+        metadata['stats'] = instance.summarize(df)
 
         if self.client[self.db_name]['metadata'].find({
             '_id': collection_name
@@ -159,17 +145,6 @@ class Grid4DMediator(Mediator):
 
                 update_selection.update({
                     'intervals': new_intervals
-                })
-
-            # Check to see if the bounding box has changed...
-            if last_metadata['bboxmd5'] != metadata['bboxmd5']:
-                # Calculate the union of the old and new bounds
-                new_bounds = self.__union_bounds__(last_metadata['bounds'],
-                    metadata['bounds'])
-
-                update_selection.update({
-                    'bbox': new_bounds,
-                    'bboxmd5': md5(new_bounds).hexdigest()
                 })
 
             # If anything's changed, update the database!

@@ -57,6 +57,12 @@ class TestSpatioTemporalMatrixes(unittest.TestCase):
 
         # Drop the old collection; it will be recreated when inserting
         self.mediator.client[self.mediator.db_name].drop_collection('test3')
+        self.mediator.client[self.mediator.db_name]['coord_index'].remove({
+            '_id': 'test3'
+        })
+        self.mediator.client[self.mediator.db_name]['metadata'].remove({
+            '_id': 'test3'
+        })
 
 
 class TestXCO2Data(unittest.TestCase):
@@ -100,6 +106,12 @@ class TestXCO2Data(unittest.TestCase):
 
         # Drop the old collection; it will be recreated when inserting
         self.mediator.client[self.mediator.db_name].drop_collection('test')
+        self.mediator.client[self.mediator.db_name]['coord_index'].remove({
+            '_id': 'test'
+        })
+        self.mediator.client[self.mediator.db_name]['metadata'].remove({
+            '_id': 'test'
+        })
         
 
 class TestKrigedXCO2Data(unittest.TestCase):
@@ -144,6 +156,12 @@ class TestKrigedXCO2Data(unittest.TestCase):
 
         # Drop the old collection; it will be recreated when inserting
         self.mediator.client[self.mediator.db_name].drop_collection('test2')
+        self.mediator.client[self.mediator.db_name]['coord_index'].remove({
+            '_id': 'test2'
+        })
+        self.mediator.client[self.mediator.db_name]['metadata'].remove({
+            '_id': 'test2'
+        })
 
 
 class TestColors(unittest.TestCase):
