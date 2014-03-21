@@ -108,7 +108,7 @@ class TransformationInterface(object):
         pass
 
 
-class AggregateCovarianceMatrix(TransformationInterface):
+class CovarianceMatrix(TransformationInterface):
     '''
     Represents a covariance matrix from aggregate covariances; assumes monthly
     aggregation (though this can be specified otherwise).
@@ -122,22 +122,24 @@ class AggregateCovarianceMatrix(TransformationInterface):
         }
         self.parameters = ['value', 'error']
         self.units = ['degrees', 'degrees']
-        self.span = '1M'
-        self.timestamp = None
-        self.var_name = None
 
-        super(AggregateCovarianceMatrix, self).__init__(path, *args, **kwargs)
+        super(CovarianceMatrix, self).__init__(path, *args, **kwargs)
 
     def describe(self, df=None, **kwargs):
         if df is None:
             df = self.extract(**kwargs)
 
         self.__metadata__ = {
-            'dates': [self.timestamp, self.timestamp],
-            'spans': [self.span],
+            'dates': [self.timestamp],
             'gridded': True,
             'gridres': self.gridres
         }
+
+        if getattr(self, 'span', None) is not None:
+            self.__metadata__['spans'] = [self.span]
+
+        if getattr(self, 'step', None) is not None:
+            self.__metadata__['steps'] = [self.step]
 
         return self.__metadata__
 
@@ -196,12 +198,17 @@ class SpatioTemporalMatrix(TransformationInterface):
         self.__metadata__ = {
             'dates': map(lambda t: t.strftime('%Y-%m-%d'),
                 [dates[0], dates[-1]]),
-            'steps': [self.step],
             'gridded': True,
             'bbox': bounds,
             'bboxmd5': md5(str(bounds)).hexdigest(),
             'gridres': self.gridres
         }
+
+        if getattr(self, 'span', None) is not None:
+            self.__metadata__['spans'] = [self.span]
+
+        if getattr(self, 'step', None) is not None:
+            self.__metadata__['steps'] = [self.step]
 
         return self.__metadata__
 
@@ -250,19 +257,6 @@ class SpatioTemporalMatrix(TransformationInterface):
         self.describe(dfm)
 
         return dfm
-
-    #FIXME Needs to be done for population, not a single data frame
-    def summarize(self, df=None, **kwargs):
-        if df is None:
-            df = self.extract(**kwargs)
-
-        return { # Axis 0 is the "row-wise" axis
-            'mean': df.mean(0).mean(),
-            'min': df.min(0).min(),
-            'max': df.max(0).max(),
-            'std': df.std(0).std(),
-            'median': df.median(0).median()
-        }
 
 
 class XCO2Matrix(TransformationInterface):

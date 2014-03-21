@@ -35,6 +35,41 @@ class Mediator(object):
         self.client = client or MongoClient() # The MongoDB client; defaults: MongoClient('localhost', 27017)
         self.db_name = db_name # The name of the MongoDB database
 
+    def __get_updates__(self, query, metadata):
+        last_metadata = query.next()
+        update_selection = {}
+
+        # Check if the last date and the first new data are the same...
+        if last_metadata['dates'][-1] != metadata['dates'][0]:
+            new_dates = list(last_metadata['dates'])
+            new_dates.extend(metadata['dates'])
+
+            update_selection.update({
+                'dates': new_dates
+            })
+
+        # Check if the last step and the first new step are the same...
+        if last_metadata.has_key('steps'):
+            if last_metadata.get('steps')[-1] != metadata.get('steps')[0]:
+                new_steps = list(last_metadata.get('steps'))
+                new_steps.extend(metadata.get('steps'))
+
+                update_selection.update({
+                    'steps': new_steps
+                })
+
+        # Check if the last span and the first new span are the same...
+        if last_metadata.has_key('spans'):
+            if last_metadata.get('spans')[-1] != metadata.get('spans')[0]:
+                new_spans = list(last_metadata.get('spans'))
+                new_spans.extend(metadata.get('spans'))
+
+                update_selection.update({
+                    'spans': new_spans
+                })
+
+        return update_selection
+
     def parse_timestamp(self, timestamp):
         '''Parses an ISO 8601 timestamp'''
         try:
@@ -49,6 +84,90 @@ class Mediator(object):
             raise ValueError('The collection name provided is a reserved name')
 
 
+#TODO Compare to Grid4DMediator to make them both more DRY
+class ImpliedGridMediator(Mediator):
+    '''
+    Mediator for what is essentially a matrix with only an implied grid--no
+    spatial coordinate index (yet). Uses the coordinate index from an existing
+    collection, specified as a new first argumet; can use the target
+    collection name for this new required first argument if the target
+    collection already exists.
+    '''
+    def __init__(self, coord_index_name=None, **kwargs):
+        # Requires: Specify the name of a collection that already has a
+        #   coordinate index
+        self.coord_index_name = coord_index_name
+
+        super(ImpliedGridMediator, self).__init__(**kwargs)
+
+    def save(self, collection_name, instance):
+        super(ImpliedGridMediator, self).save(collection_name, instance)
+
+        df = instance.extract()
+
+        # Create the index of grid cell coordinates, if needed
+        if self.client[self.db_name]['coord_index'].find({
+            '_id': collection_name
+        }).count() == 0:
+            coords = self.client[self.db_name]['coord_index'].find({
+                '_id': self.coord_index_name or collection_name
+            }).next()['i']
+
+            k = self.client[self.db_name]['coord_index'].insert({
+                '_id': collection_name,
+                'i': coords
+            })
+
+        for i, series in df.iterrows():
+            if instance.precision is not None:
+                self.client[self.db_name][collection_name].insert({
+                    '_id': '%s_%d' % (instance.timestamp, i),
+                    'values': map(lambda x: round(x, instance.precision),
+                        series.tolist())
+                })
+
+            else:
+                self.client[self.db_name][collection_name].insert({
+                    '_id': '%s_%d' % (instance.timestamp, i),
+                    'values': series.tolist()
+                })
+
+        # Get the metadata; assume they are all the same
+        metadata = instance.describe(df)
+
+        # Set the unique identifier; include the summary statistics
+        metadata['_id'] = collection_name
+        metadata['stats'] = self.summarize(collection_name)
+
+        if self.client[self.db_name]['metadata'].find({
+            '_id': collection_name
+        }).count() == 0:
+            self.client[self.db_name]['metadata'].insert(metadata)
+
+        else:
+            update_selection = self.__get_updates__(query, metadata)
+
+            # If anything's changed, update the database!
+            if len(update_selection.items()) != 0:
+                # Update the metadata
+                self.client[self.db_name]['metadata'].update({
+                    '_id': collection_name
+                }, {
+                    '$set': update_selection
+                })
+
+    def summarize(self, collection_name, query={}):
+        df = self.load(collection_name, query)#TODO load() method
+
+        return { # Axis 0 is the "row-wise" axis
+            'mean': df.mean(0).mean(),
+            'min': df.min(0).min(),
+            'max': df.max(0).max(),
+            'std': df.std(0).std(),
+            'median': df.median(0).median()
+        }
+
+
 class Grid4DMediator(Mediator):
     '''
     Mediator that understands spatial data on a structured, longitude-latitude
@@ -56,7 +175,7 @@ class Grid4DMediator(Mediator):
     time steps (frames). Geometry expected as grid centroids (e.g. centroids
     of 1-degree grid cells).
     '''
-    values_precision = 2
+    values_precision = 2 #FIXME Should be done in the model
 
     def load(self, collection_name, query):
         # Retrieve a cursor to iterate over the records matching the query
@@ -118,7 +237,7 @@ class Grid4DMediator(Mediator):
 
         # Set the unique identifier; include the summary statistics
         metadata['_id'] = collection_name
-        metadata['stats'] = instance.summarize(df) #FIXME Needs to be for population, not a single data frame
+        metadata['stats'] = self.summarize(collection_name)
 
         if self.client[self.db_name]['metadata'].find({
             '_id': collection_name
@@ -126,35 +245,18 @@ class Grid4DMediator(Mediator):
             self.client[self.db_name]['metadata'].insert(metadata)
 
         else:
-            last_metadata = query.next()
-            update_selection = {}
+            update_selection = self.__get_updates__(query, metadata)
 
-            # Check if the last date and the first new data are the same...
-            if last_metadata['dates'][-1] != metadata['dates'][0]:
-                new_dates = list(last_metadata['dates'])
-                new_dates.extend(metadata['dates'])
+    def summarize(self, collection_name, query={}):
+        df = self.load(collection_name, query)
 
-                update_selection.update({
-                    'dates': new_dates
-                })
-
-            # Check if the last step and the first new step are the same...
-            if last_metadata['steps'][-1] != metadata['steps'][0]:
-                new_steps = list(last_metadata['steps'])
-                new_steps.extend(metadata['steps'])
-
-                update_selection.update({
-                    'steps': new_steps
-                })
-
-            # If anything's changed, update the database!
-            if len(update_selection.items()) != 0:
-                # Update the metadata
-                self.client[self.db_name]['metadata'].update({
-                    '_id': collection_name
-                }, {
-                    '$set': update_selection
-                })
+        return { # Axis 0 is the "row-wise" axis
+            'mean': df.mean(0).mean(),
+            'min': df.min(0).min(),
+            'max': df.max(0).max(),
+            'std': df.std(0).std(),
+            'median': df.median(0).median()
+        }
 
 
 class Grid3DMediator(Mediator):
@@ -230,7 +332,6 @@ class Grid3DMediator(Mediator):
             
         j = self.client[self.db_name][collection_name].insert(data_dict)
 
-    #TODO Migrate this to the model
     def summarize(self, model, collection_name, query={}):
         dfs = self.load_from_db(collection_name, query)
         
