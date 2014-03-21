@@ -5,7 +5,7 @@ to return a string or sequence of strings where each string is a file system
 path (either a directory or a file).
 '''
 
-import datetime, os, sys, re, math, warnings, ipdb #FIXME
+import datetime, os, sys, re, math, warnings
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -32,8 +32,7 @@ class AbstractGridView:
         self.mediator = mediator
         self.model = model
         self.collection_name = collection_name
-        self.field_units = dict(zip(model.defaults.get('columns'),
-            model.defaults.get('units')))
+        self.field_units = dict(zip(model.columns, model.units))
 
     def __breakpoints__(self, series, bins):
         if not isinstance(bins, int):
@@ -109,7 +108,7 @@ class AbstractGridView:
 
     def __square_bounds__(self, coords, altitude=None):
         # For this gridded product, assume square cells; get grid cell resolution
-        gridres = self.model.defaults.get('resolution').get('x_length')
+        gridres = self.model.gridres.get('x')
 
         # Get the rectangular bounds of the model cell at the grid resolution
         if not any(map(lambda x: np.isnan(x), coords)):

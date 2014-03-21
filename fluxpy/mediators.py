@@ -138,13 +138,13 @@ class Grid4DMediator(Mediator):
                     'dates': new_dates
                 })
 
-            # Check if the last interval and the first new interval are the same...
-            if last_metadata['intervals'][-1] != metadata['intervals'][0]:
-                new_intervals = list(last_metadata['intervals'])
-                new_intervals.extend(metadata['intervals'])
+            # Check if the last step and the first new step are the same...
+            if last_metadata['steps'][-1] != metadata['steps'][0]:
+                new_steps = list(last_metadata['steps'])
+                new_steps.extend(metadata['steps'])
 
                 update_selection.update({
-                    'intervals': new_intervals
+                    'steps': new_steps
                 })
 
             # If anything's changed, update the database!
@@ -222,7 +222,7 @@ class Grid3DMediator(Mediator):
         # Create the data document itself
         data_dict = {
             '_id': self.parse_timestamp(instance.timestamp),
-            '_range': int(instance.range) or None
+            '_span': int(instance.span) or None
         }
         
         for param in instance.parameters:

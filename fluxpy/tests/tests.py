@@ -20,11 +20,11 @@ class TestSpatioTemporalMatrixes(unittest.TestCase):
     def test_model_instance(self):
         '''Should properly instantiate an SpatioTemporalMatrix model instance'''
         flux = SpatioTemporalMatrix(os.path.join(self.path, 'casagfed2004.mat'),
-            timestamp='2004-06-30T00:00:00', var_name='test', range=10800)
+            timestamp='2004-06-30T00:00:00', var_name='test', span=10800)
 
         self.assertEqual(flux.var_name, 'test')
-        self.assertEqual(flux.interval, 10800)
-        self.assertEqual(flux.range, 10800)
+        self.assertEqual(flux.step, 10800)
+        self.assertEqual(flux.span, 10800)
         self.assertEqual(flux.timestamp, '2004-06-30T00:00:00')
 
     def test_model_var_name_inference(self):
@@ -77,8 +77,8 @@ class TestXCO2Data(unittest.TestCase):
             timestamp='2009-06-15')
 
         self.assertEqual(xco2.var_name, 'XCO2')
-        self.assertEqual(xco2.interval, 86400)
-        self.assertEqual(xco2.range, None)
+        self.assertEqual(xco2.step, 86400)
+        self.assertEqual(xco2.span, None)
         self.assertEqual(xco2.timestamp, '2009-06-15')
         
     def test_model_extract(self):
@@ -126,8 +126,8 @@ class TestKrigedXCO2Data(unittest.TestCase):
             timestamp='2009-06-15')
 
         self.assertEqual(xco2.var_name, 'krigedData')
-        self.assertEqual(xco2.interval, None)
-        self.assertEqual(xco2.range, 518400)
+        self.assertEqual(xco2.step, None)
+        self.assertEqual(xco2.span, 518400)
         self.assertEqual(xco2.timestamp, '2009-06-15')
         
     def test_model_extract(self):
@@ -151,7 +151,7 @@ class TestKrigedXCO2Data(unittest.TestCase):
         query = self.mediator.client[self.mediator.db_name]['test2'].find({
             '_id': datetime.datetime(2009, 6, 15, 0, 0, 0),
         })
-        self.assertEqual(query[0]['_range'], 518400)
+        self.assertEqual(query[0]['_span'], 518400)
         self.assertEqual(len(query[0]['values']), 14210)
 
         # Drop the old collection; it will be recreated when inserting
