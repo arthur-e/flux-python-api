@@ -8,20 +8,19 @@ Example JSON configuration file for a model:
     "geometry": { # Only applies for non-structured data
         # True to specify that each document is a FeatureCollection; if False,
         #   each row will be stored as a separate document (a separate simple feature)
-        "isCollection": false,
+        "is_collection": false,
         "type": "Point" # The WKT type to make for each row
     },
     "header": [], # The human-readable column headers, in order
-    "interval": null, # The time interval (seconds) between observations (documents)
+    "step": null, # The time step (seconds) between observations (documents)
     "parameters": [], # The names of those data fields other than space and time fields
-    "range": null, # The amount of time (ms) for which the measurements are valid after the timestamp
-    "resolution": { # Mutually exclusive with the "geometry" key
+    "span": null, # The amount of time (ms) for which the measurements are valid after the timestamp
+    "gridres": { # Mutually exclusive with the "geometry" key
         "units": "degrees",
-        "x_length": 0.5, # Grid cell resolution in the x direction
-        "y_length": 0.5, # Grid cell resolution in the y direction
+        "x": 0.5, # Grid cell resolution in the x direction
+        "y": 0.5, # Grid cell resolution in the y direction
     },
     "timestamp": null, # The ISO 8601 timestamp
-    "transforms": [], # Lambda functions (as strings for eval()) to be applied to values per-field
     "units": [], # The units of measurement, in order
     "var_name": null, # The Matlab/HDF5 variable of interst
 }
@@ -89,7 +88,12 @@ class TransformationInterface(object):
             setattr(self, config, self.config.get(config))
 
     def __open__(self, path, var_name=None):
-        self.file = self.file_handler(path) # HDF5/Matlab file interface
+        try:
+            self.file = self.file_handler(path) # HDF5/Matlab file interface
+
+        except NotImplementedError:
+            self.file_handler = h5py.File
+            self.file = self.file_handler(path)
 
         # Infer var_name; grab the first variable name that isn't __private__
         if var_name is None and getattr(self, 'var_name', None) is None:
@@ -104,6 +108,56 @@ class TransformationInterface(object):
         pass
 
 
+class AggregateCovarianceMatrix(TransformationInterface):
+    '''
+    Represents a covariance matrix from aggregate covariances; assumes monthly
+    aggregation (though this can be specified otherwise).
+    '''
+    def __init__(self, path, *args, **kwargs):
+        self.precision = 5 #TODO Add to schema
+        self.gridres = {
+            'units': 'degrees',
+            'x': 0.5,
+            'y': 0.5,
+        }
+        self.parameters = ['value', 'error']
+        self.units = ['degrees', 'degrees']
+        self.span = '1M'
+        self.timestamp = None
+        self.var_name = None
+
+        super(AggregateCovarianceMatrix, self).__init__(path, *args, **kwargs)
+
+    def describe(self, df=None, **kwargs):
+        if df is None:
+            df = self.extract(**kwargs)
+
+        self.__metadata__ = {
+            'dates': [self.timestamp, self.timestamp],
+            'spans': [self.span],
+            'gridded': True,
+            'gridres': self.gridres
+        }
+
+        return self.__metadata__
+
+    def extract(self, *args, **kwargs):
+        '''Creates a DataFrame properly encapsulating the associated file data'''
+        if self.timestamp is None:
+            raise AttributeError('One or more required configuration parameters were not provided')
+
+        # Allow overrides through optional keyword arguments in extract()
+        self.__configure__(**kwargs)
+
+        df = pd.DataFrame(self.file.get(self.var_name)[:])
+        assert df.shape[0] == df.shape[1], 'Expected a square matrix (covariance matrix)'
+
+        if self.precision is not None:
+            df = df.apply(lambda col: col.map(lambda x: float(('%%.%df' % self.precision) % x)))
+
+        return df
+
+
 class SpatioTemporalMatrix(TransformationInterface):
     '''
     A generic matrix with two spatial dimensions in the first two columns and
@@ -115,16 +169,16 @@ class SpatioTemporalMatrix(TransformationInterface):
             'x': '%.5f',
             'y': '%.5f'
         }
-        self.resolution = { # Mutually exclusive with the "geometry" key
+        self.gridres = { # Mutually exclusive with the "geometry" key
             'units': 'degrees',
             'x': 0.5, # Grid cell resolution in the x direction
             'y': 0.5, # Grid cell resolution in the y direction
         }
         self.header = ['lng', 'lat']
-        self.interval = 10800 # 3 hours in seconds
+        self.step = 10800 # 3 hours in seconds
         self.parameters = ['value', 'error']
         self.units = ['degrees', 'degrees']
-        self.range = None
+        self.span = None
         self.timestamp = None
         self.transforms = {}
         self.var_name = None
@@ -137,16 +191,16 @@ class SpatioTemporalMatrix(TransformationInterface):
 
         bounds = MultiPoint(list(df.index.values)).bounds
         dates = pd.date_range(self.timestamp, periods=df.shape[1],
-            freq='%dS' % self.interval)
+            freq='%dS' % self.step)
 
         self.__metadata__ = {
-            'dates': map(lambda t: t.strftime('%Y-%m-%dT%H:%M:%S'),
+            'dates': map(lambda t: t.strftime('%Y-%m-%d'),
                 [dates[0], dates[-1]]),
-            'intervals': [self.interval],
+            'steps': [self.step],
             'gridded': True,
             'bbox': bounds,
             'bboxmd5': md5(str(bounds)).hexdigest(),
-            'gridres': self.resolution
+            'gridres': self.gridres
         }
 
         return self.__metadata__
@@ -160,16 +214,16 @@ class SpatioTemporalMatrix(TransformationInterface):
         self.__configure__(**kwargs)
 
         # Create the column headers as a time series
-        intervals = self.file[self.var_name].shape[1] - len(self.columns)
+        steps = self.file.get(self.var_name).shape[1] - len(self.columns)
         cols = list(self.columns)
-        cols.extend(pd.date_range(self.timestamp, periods=intervals,
-            freq='%dS' % self.interval))
+        cols.extend(pd.date_range(self.timestamp, periods=steps,
+            freq='%dS' % self.step))
 
         # Alternatively; for column names as strings:
         # dt = datetime.datetime.strptime(self.timestamp, '%Y-%m-%dT%H:%M:%S')
         # cols.extend([
-        #     datetime.datetime.strftime(dt + relativedelta(seconds=int(self.interval*j)),
-        #         '%Y-%m-%dT%H:%M:%S') for j in range(intervals)
+        #     datetime.datetime.strftime(dt + relativedelta(seconds=int(self.step*j)),
+        #         '%Y-%m-%dT%H:%M:%S') for j in range(steps)
         # ])
 
         # Data frame
@@ -197,6 +251,7 @@ class SpatioTemporalMatrix(TransformationInterface):
 
         return dfm
 
+    #FIXME Needs to be done for population, not a single data frame
     def summarize(self, df=None, **kwargs):
         if df is None:
             df = self.extract(**kwargs)
@@ -213,7 +268,7 @@ class SpatioTemporalMatrix(TransformationInterface):
 class XCO2Matrix(TransformationInterface):
     '''
     Understands XCO2 data as formatted--Typically 6-day spans of XCO2
-    concentrations (ppm) at daily intervals on a latitude-longitude grid.
+    concentrations (ppm) at daily steps on a latitude-longitude grid.
     Matrix dimensions: 1,311 (observations) x 6 (attributes).
     Columns: Longitude, latitude, XCO2 concentration (ppm), day of the year,
     year, retrieval error (ppm).
@@ -227,15 +282,15 @@ class XCO2Matrix(TransformationInterface):
             'error': '%.4f'
         }
         self.geometry = {
-            'isCollection': False,
+            'is_collection': False,
             'type': 'Point'
         }
         self.header = ['lng', 'lat', 'xco2_ppm', 'day', 'year', 'error_ppm']
-        self.interval = 86400 # 1 day (daily) in seconds
+        self.step = 86400 # 1 day (daily) in seconds
         self.parameters = ['value', 'error']
         self.units = ['degrees', 'degrees', 'ppm', None, None, 'ppm^2']
         self.var_name = 'XCO2'
-        self.range = None
+        self.span = None
 
         super(XCO2Matrix, self).__init__(path, *args, **kwargs)
 
@@ -280,7 +335,7 @@ class XCO2Matrix(TransformationInterface):
 class KrigedXCO2Matrix(TransformationInterface):
     '''
     Understands Kriged XCO2 data as formatted--Typically 6-day spans of XCO2
-    concentrations (ppm) at daily intervals on a latitude-longitude grid.
+    concentrations (ppm) at daily steps on a latitude-longitude grid.
     Matrix dimensions: 14,210 (model cells) x 9 (attributes).
     Columns: Longitude, latitude, XCO2 concentration (ppm), retrieval error (ppm)
     '''
@@ -292,15 +347,15 @@ class KrigedXCO2Matrix(TransformationInterface):
             'values': '%.2f',
             'errors': '%.4f'
         }
-        self.header = ['lat', 'lng', 'xco2_ppm', 'error_ppm^2', '', '', '', '', '']
-        self.interval = None
-        self.parameters = ['values', 'errors']
-        self.range = 518400 # 6 days in seconds
-        self.resolution = {
-            'x_length': 0.5,
-            'y_length': 0.5,
+        self.gridres = {
+            'x': 0.5,
+            'y': 0.5,
             'units': 'degrees'
         }
+        self.header = ['lat', 'lng', 'xco2_ppm', 'error_ppm^2', '', '', '', '', '']
+        self.step = None
+        self.parameters = ['values', 'errors']
+        self.span = 518400 # 6 days in seconds
         self.transforms = {
             'errors': lambda x: math.sqrt(x)
         }

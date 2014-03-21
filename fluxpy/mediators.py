@@ -118,7 +118,7 @@ class Grid4DMediator(Mediator):
 
         # Set the unique identifier; include the summary statistics
         metadata['_id'] = collection_name
-        metadata['stats'] = instance.summarize(df)
+        metadata['stats'] = instance.summarize(df) #FIXME Needs to be for population, not a single data frame
 
         if self.client[self.db_name]['metadata'].find({
             '_id': collection_name
