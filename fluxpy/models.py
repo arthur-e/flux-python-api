@@ -117,8 +117,8 @@ class CovarianceMatrix(TransformationInterface):
         self.precision = 5 #TODO Add to schema
         self.gridres = {
             'units': 'degrees',
-            'x': 0.5,
-            'y': 0.5,
+            'x': 1.0,
+            'y': 1.0,
         }
         self.parameters = ['value', 'error']
         self.units = ['degrees', 'degrees']
@@ -173,8 +173,8 @@ class SpatioTemporalMatrix(TransformationInterface):
         }
         self.gridres = { # Mutually exclusive with the "geometry" key
             'units': 'degrees',
-            'x': 0.5, # Grid cell resolution in the x direction
-            'y': 0.5, # Grid cell resolution in the y direction
+            'x': 1.0, # Grid cell resolution in the x direction
+            'y': 1.0, # Grid cell resolution in the y direction
         }
         self.header = ['lng', 'lat']
         self.step = 10800 # 3 hours in seconds
