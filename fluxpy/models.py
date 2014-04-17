@@ -196,7 +196,7 @@ class SpatioTemporalMatrix(TransformationInterface):
             freq='%dS' % self.step)
 
         self.__metadata__ = {
-            'dates': map(lambda t: t.strftime('%Y-%m-%d'),
+            'dates': map(lambda t: t.strftime('%Y-%m-%dT%H:%M:%S%z'),
                 [dates[0], dates[-1]]),
             'gridded': True,
             'bbox': bounds,

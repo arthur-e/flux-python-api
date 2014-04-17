@@ -1,10 +1,12 @@
 import os
 from setuptools import setup
 
-# Utility for installing packages via command line apt-get call
+# Insert OS check?
+
+
+# Utility for installing a list of packages via command line apt-get call
 def aptget(packages):
-    for package in packages:
-        os.system('sudo apt-get install {0}'.format(package))
+    os.system('sudo apt-get install {0}'.format(' '.join(packages)))
 
 # Utility function to read the README file, used for long_description (which is used for PyPI documentation)
 def read(fname):
@@ -13,6 +15,8 @@ def read(fname):
 # Install system dependencies
 print 'Installing system dependencies (HDF5, libxml)...'
 system_dependencies = ['python-dev',
+                       'python-numpy',
+                       'python-matplotlib',
                        'libfreetype6', # matplotlib requirement
                        'libfreetype6-dev', # matplotlib requirement
                        'libpng12', # matplotlib requirement
@@ -50,6 +54,8 @@ print 'Running python setup...'
 with open('DEPENDENCIES.txt') as f:
     required = f.read().splitlines()
 
+print required
+
 setup(
       name='flux-python-api',
       version=0.1,
@@ -58,20 +64,19 @@ setup(
       description='Tools for loading Matlab/HDF5 data to Mongo DB',
       long_description=read('README.md'),
       url='https://github.com/arthur-e/flux-python-api',
-      license='BSD', # for WFEIS, it was 'BSD'
+      license='BSD', # check?
       packages=['fluxpy','fluxpy.legacy'], # modules are specified by module name, not filename (the same will hold true for packages and extensions)
-      package_data={'fluxpy' : 'tests/*.mat'}, # do we need to include these?
-      install_requires=required,
-      keywords='nasa','co2','hdf5','mongodb',
+      package_data={'fluxpy' : ['tests/*.mat']}, # do we need to include these?
       classifiers=[
         'Programming Language :: Python',
         'License :: OSI Approved :: BSD License',
-        'Operating System :: Linux BSD', # check
-        'Development Status :: 3 - Alpha', # check
+        'Operating System :: Linux BSD',
+        'Development Status :: 3 - Alpha',
         'Intended Audience :: Science/Research',
         'Intended Audience :: Developers',
         'Intended Audience :: System Administrators',
         'Topic :: Scientific/Engineering :: Physics',
-        'Topic :: Software Development :: Libraries :: Python Modules',
-    ],
+        'Topic :: Software Development :: Libraries :: Python Modules'
+        ],
+      install_requires=required,
       )
