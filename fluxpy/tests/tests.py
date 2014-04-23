@@ -38,7 +38,7 @@ class TestSpatioTemporalMatrixes(unittest.TestCase):
     def test_model_describe(self):
         '''Should produce metadata for a SpatioTemporalMatrix model instance'''
         flux = SpatioTemporalMatrix(os.path.join(self.path, 'casagfed2004.mat'),
-            timestamp='2004-06-30T00:00:00', var_name='test')
+            timestamp='2004-06-30T00:00:00', var_name='test',span=10800)
         
         df = flux.describe()
         self.assertEqual(df['bbox'], (-166.5, 60.5, -163.5, 68.5))
@@ -152,7 +152,7 @@ class TestKrigedXCO2Data(unittest.TestCase):
             timestamp='2009-06-15')
 
         df1 = xco2.extract()
-        self.assertEqual(df1.shapeHu, (14210, 9))
+        self.assertEqual(df1.shape, (14210, 9))
 
         # Should allow overrides in the extract() method
         df2 = xco2.extract(timestamp='2010-01-01')
