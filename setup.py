@@ -16,18 +16,18 @@ def read(fname):
 print 'Installing system dependencies (HDF5, libxml)...'
 system_dependencies = ['python-dev',
                        'python-numpy',
-                       'python-matplotlib',
-                       'libfreetype6', # matplotlib requirement
-                       'libfreetype6-dev', # matplotlib requirement
-                       'libpng12', # matplotlib requirement
-                       'libpng12-dev', # matplotlib requirement
+                       #'python-matplotlib',
+                       #'libfreetype6', # matplotlib requirement
+                       #'libfreetype6-dev', # matplotlib requirement
+                       #'libpng12', # matplotlib requirement; installed automatically (now libpng12-0) as dependency to libpng12-dev
+                       #'libpng12-dev', # matplotlib requirement
                        'gfortran', # scipy requirement
                        'libopenblas-dev', # scipy requirement
                        'liblapack-dev', # scipy requirement
-                       'libhdf5-dev',
+                       'libhdf5-serial-dev',
                        'libxml2',
                        'libxml2-dev',
-                       'libxslt1',
+                       #'libxslt1', # installed automatically (now v1.1) as a dependency to libxslt1-dev
                        'libxslt1-dev']
 
 aptget(system_dependencies)
@@ -47,10 +47,12 @@ os.system('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv 7F0CEB10')
 os.system("echo 'deb http://downloads-distro.mongodb.org/repo/ubuntu-upstart dist 10gen' | sudo tee /etc/apt/sources.list.d/10gen.list")
 os.system('sudo apt-get update && sudo apt-get install mongodb-10gen')
 
+
+###############################
 # Run setuptools setup
 print 'Running python setup...'
 
-# get list of dependencies
+# get list of python dependencies
 with open('DEPENDENCIES.txt') as f:
     required = f.read().splitlines()
 
@@ -58,25 +60,22 @@ print required
 
 setup(
       name='flux-python-api',
-      version=0.1,
+      version=0.01,
       author='K. Arthur Endsley',
       author_email='kaendsle@mtu.edu',
       description='Tools for loading Matlab/HDF5 data to Mongo DB',
       long_description=read('README.md'),
       url='https://github.com/arthur-e/flux-python-api',
-      license='BSD', # check?
+      license='No license/not allowed to use', # check?
       packages=['fluxpy','fluxpy.legacy'], # modules are specified by module name, not filename (the same will hold true for packages and extensions)
       package_data={'fluxpy' : ['tests/*.mat']}, # do we need to include these?
       classifiers=[
         'Programming Language :: Python',
-        'License :: OSI Approved :: BSD License',
+        'License :: Other/Proprietary License',
         'Operating System :: Linux BSD',
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Science/Research',
-        'Intended Audience :: Developers',
-        'Intended Audience :: System Administrators',
         'Topic :: Scientific/Engineering :: Physics',
-        'Topic :: Software Development :: Libraries :: Python Modules'
         ],
       install_requires=required,
       )

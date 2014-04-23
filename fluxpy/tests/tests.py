@@ -6,6 +6,8 @@ import pandas as pd
 import numpy as np
 import h5py
 from lxml import etree
+import sys
+sys.path.append('/usr/local/project/flux-python-api/')
 from fluxpy.legacy.transform import bulk_hdf5_to_csv
 from fluxpy.mediators import Grid4DMediator, Grid3DMediator, Unstructured3DMediator
 from fluxpy.models import KrigedXCO2Matrix, XCO2Matrix, SpatioTemporalMatrix
@@ -33,6 +35,20 @@ class TestSpatioTemporalMatrixes(unittest.TestCase):
 
         self.assertEqual(flux.var_name, 'test')
 
+    def test_model_describe(self):
+        '''Should produce metadata for a SpatioTemporalMatrix model instance'''
+        flux = SpatioTemporalMatrix(os.path.join(self.path, 'casagfed2004.mat'),
+            timestamp='2004-06-30T00:00:00', var_name='test')
+        
+        df = flux.describe()
+        self.assertEqual(df['bbox'], (-166.5, 60.5, -163.5, 68.5))
+        self.assertEqual(df['bboxmd5'], '51d5738489b4ae4fa8623f867de527ce')
+        self.assertEqual(df['dates'], ['2004-06-30T00:00:00', '2004-06-30T21:00:00'])
+        self.assertEqual(df['gridded'], True)
+        self.assertEqual(df['gridres'], {'units': 'degrees', 'x': 1.0, 'y': 1.0})
+        self.assertEqual(df['spans'], [10800])
+        self.assertEqual(df['steps'], [10800])
+    
     def test_model_extract(self):
         '''Should extract a DataFrame in an SpatioTemporalMatrix model instance'''
         flux = SpatioTemporalMatrix(os.path.join(self.path, 'casagfed2004.mat'),
@@ -136,7 +152,7 @@ class TestKrigedXCO2Data(unittest.TestCase):
             timestamp='2009-06-15')
 
         df1 = xco2.extract()
-        self.assertEqual(df1.shape, (14210, 9))
+        self.assertEqual(df1.shapeHu, (14210, 9))
 
         # Should allow overrides in the extract() method
         df2 = xco2.extract(timestamp='2010-01-01')
