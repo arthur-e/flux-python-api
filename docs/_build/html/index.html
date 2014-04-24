@@ -1,0 +1,200 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Welcome to flux-python-api documentation! &mdash; flux-python-api 0.01 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.01',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="flux-python-api 0.01 documentation" href="#" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li><a href="#">flux-python-api 0.01 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="welcome-to-flux-python-api-documentation">
+<h1>Welcome to <strong>flux-python-api</strong> documentation!<a class="headerlink" href="#welcome-to-flux-python-api-documentation" title="Permalink to this headline">¶</a></h1>
+<p>Contents: buncha stuff!</p>
+<div class="toctree-wrapper compound">
+<ul class="simple">
+</ul>
+</div>
+</div>
+<div class="section" id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><em>Index</em></a></li>
+<li><a class="reference internal" href="py-modindex.html"><em>Module Index</em></a></li>
+<li><a class="reference internal" href="search.html"><em>Search Page</em></a></li>
+</ul>
+</div>
+<div class="section" id="installation-and-setup">
+<h1>Installation and Setup<a class="headerlink" href="#installation-and-setup" title="Permalink to this headline">¶</a></h1>
+<blockquote>
+<div>Just, like, ask the IT guy.</div></blockquote>
+</div>
+<div class="section" id="loading-data-to-from-mongodb-with-mediators">
+<h1>Loading Data To/From MongoDB with Mediators<a class="headerlink" href="#loading-data-to-from-mongodb-with-mediators" title="Permalink to this headline">¶</a></h1>
+<p>Given the examples of gridded (kriged) and not-gridded XCO2 data, here is the
+process for loading these data into the MongoDB database:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">fluxpy.mediators</span> <span class="kn">import</span> <span class="n">Grid3DMediator</span>
+<span class="kn">from</span> <span class="nn">fluxpy.models</span> <span class="kn">import</span> <span class="n">XCO2Matrix</span>
+
+<span class="c"># The mediator understands how 3D gridded data should be stored</span>
+<span class="n">mediator</span> <span class="o">=</span> <span class="n">Grid3DMediator</span><span class="p">()</span>
+
+<span class="c"># Create an instance of the XCO2Matrix data model; parameters are loaded</span>
+<span class="c">#   from a parameter file with the same name (e.g. xco2_data.json) if it</span>
+<span class="c">#   exists but otherwise are set as optional keyword arguments</span>
+<span class="n">xco2</span> <span class="o">=</span> <span class="n">KrigedXCO2Matrix</span><span class="p">(</span><span class="s">&#39;xco2_data.mat&#39;</span><span class="p">,</span> <span class="n">timestamp</span><span class="o">=</span><span class="s">&#39;2009-06-15&#39;</span><span class="p">)</span>
+
+<span class="c"># Add the instance to our mediator and save it to the database using</span>
+<span class="c">#   the collection name provided</span>
+<span class="n">mediator</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">xco2</span><span class="p">)</span><span class="o">.</span><span class="n">save_to_db</span><span class="p">(</span><span class="s">&#39;my_xco2_data&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="working-with-casa-gfed-flux-data">
+<h1>Working with CASA-GFED Flux Data<a class="headerlink" href="#working-with-casa-gfed-flux-data" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="importing-from-matlab-hdf5-files">
+<h2>Importing from Matlab/HDF5 Files<a class="headerlink" href="#importing-from-matlab-hdf5-files" title="Permalink to this headline">¶</a></h2>
+<p>You can import directly from an older Matlab file using <cite>scipy.io</cite>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">mat</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">loadmat</span><span class="p">(</span><span class="s">&#39;/path/to/file.mat&#39;</span><span class="p">)</span>
+
+<span class="c"># Variables are indexed by their names:</span>
+<span class="n">my_variable</span> <span class="o">=</span> <span class="n">mat</span><span class="p">[</span><span class="s">&#39;my_variable&#39;</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Tools are available for a importing both Matlab and HDF5 model data in a more manageable (transposed) format, where the model windows (in time) are rows of the table and model cells are the columns:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">casagfed.io</span> <span class="kn">import</span> <span class="n">mat_to_dataframe</span><span class="p">,</span> <span class="n">hdf5_to_dataframe</span>
+
+<span class="c"># Get a pandas Data Frame in return; skips the first 2 columns (e.g. latitude and longitude)</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">mat_to_dataframe</span><span class="p">(</span><span class="s">&#39;/path/to/file.mat&#39;</span><span class="p">,</span> <span class="n">variable_name</span><span class="p">)</span>
+
+<span class="c"># Same procedure for HDF5 files</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">hdf5_to_dataframe</span><span class="p">(</span><span class="s">&#39;/path/to/file.mat&#39;</span><span class="p">,</span> <span class="n">variable_name</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <cite>variable_name</cite> is the Matlab variable name of the matrix for which you want to get a CSV.</p>
+</div>
+<div class="section" id="exporting-to-csv">
+<h2>Exporting to CSV<a class="headerlink" href="#exporting-to-csv" title="Permalink to this headline">¶</a></h2>
+<p>For older Matlab files:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">mat</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">loadmat</span><span class="p">(</span><span class="s">&#39;/path/to/file.mat&#39;</span><span class="p">)</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">mat</span><span class="p">[</span><span class="n">variable_name</span><span class="p">])</span>
+<span class="n">df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="s">&#39;output_filename.csv&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>For HDF5 files, again generating a transposed matrix from the original:</p>
+<div class="highlight-python"><div class="highlight"><pre>from casagfed.io import hdf5_to_dataframe, to_csv
+
+# Writes a CSV file in the current directory; skips the first 2 columns (e.g. latitude and longitude)
+to_csv(hdf5_to_dataframe(&#39;path_to_file.mat&#39;, variable_name)
+</pre></div>
+</div>
+<p>In each case, the <cite>variable_name</cite> is the Matlab variable name of the matrix for which you want to get a CSV.</p>
+</div>
+</div>
+<div class="section" id="mongodb-administration">
+<h1>MongoDB Administration<a class="headerlink" href="#mongodb-administration" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="insertion">
+<h2>Insertion<a class="headerlink" href="#insertion" title="Permalink to this headline">¶</a></h2>
+<p>Tools are available for performing a bulk insert into MongoDB; here we assume a non-HDF5 Matlab file:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">casagfed.mongodb</span> <span class="kn">import</span> <span class="n">insert_bulk</span>
+
+<span class="c"># The starting date and time need to be provided as a datetime.datetime instance</span>
+<span class="n">insert_bulk</span><span class="p">(</span><span class="s">&#39;/path/to/file.mat&#39;</span><span class="p">,</span> <span class="n">variable_name</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2004</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="#">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Welcome to <strong>flux-python-api</strong> documentation!</a></li>
+<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+<li><a class="reference internal" href="#installation-and-setup">Installation and Setup</a></li>
+<li><a class="reference internal" href="#loading-data-to-from-mongodb-with-mediators">Loading Data To/From MongoDB with Mediators</a></li>
+<li><a class="reference internal" href="#working-with-casa-gfed-flux-data">Working with CASA-GFED Flux Data</a><ul>
+<li><a class="reference internal" href="#importing-from-matlab-hdf5-files">Importing from Matlab/HDF5 Files</a></li>
+<li><a class="reference internal" href="#exporting-to-csv">Exporting to CSV</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#mongodb-administration">MongoDB Administration</a><ul>
+<li><a class="reference internal" href="#insertion">Insertion</a></li>
+</ul>
+</li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/index.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li><a href="#">flux-python-api 0.01 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, K. Arthur Endsley.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
