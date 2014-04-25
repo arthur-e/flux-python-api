@@ -12,7 +12,6 @@ Contents: buncha stuff!
    :maxdepth: 2
 
 
-
 Indices and tables
 ==================
 
@@ -25,6 +24,14 @@ Installation and Setup
 ================================
 
 	Just, like, ask the IT guy.
+
+Installation without a Python Virtual Environment 
+-------------------------------------------------
+::
+
+	cd /where/my/repo/lives/flux-python-api
+	[sudo] python setup.py install
+
 
 
 Installation within a Python Virtual Environment (recommended)

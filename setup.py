@@ -9,9 +9,6 @@ def read(fname):
 # Check if Linux and run setup.sh if so
 if 'Linux' in platform.platform():
     os.system('./setup.sh')
-
-#print 'Installing numpy...'
-#os.system('pip install numpy==1.7.0')
  
 ###############################
 # Run setuptools setup
@@ -20,9 +17,17 @@ print 'Running python setup...'
 # get list of python dependencies
 with open('DEPENDENCIES.txt') as f:
     required = f.read().splitlines()
- 
-print required
- 
+
+# Due to a bug having to do with install numpy via setuptools within a
+# virtual environment, for now we remove numpy from the list and instead
+# install it via pip
+for r in required:
+    if 'numpy' in r:
+        numpy_req = r
+        required.remove(r)
+os.system('pip install ' + numpy_req)
+
+
 setup(
       name='flux-python-api',
       version=0.01,
