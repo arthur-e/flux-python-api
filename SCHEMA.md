@@ -2,7 +2,7 @@
 # Metadata Schema #
 ###################
 
-Last updated: March 21, 2014.
+Last updated: April 25, 2014.
 
 ########################################
 ## Required Parameters for Web Client ##
@@ -92,6 +92,8 @@ the data model (TransformationInterface) is compatible.
 
     "timestamp": String,        // An ISO 8601 timestamp for the first observation
 
+    "title": String,			// Human-readable "pretty" name for the data set 
+    
     "units": [String],          // Array of units for each field, in order
 
     "var_name": String          // The name of the variable in the hierarchical
@@ -171,6 +173,8 @@ the data model (TransformationInterface) is compatible.
 
     "timestamp": String,        // An ISO 8601 timestamp for the first observation
 
+    "title": String,			// Human-readable "pretty" name for the data set 
+    
     "uncertainty": {            // Indicates that uncertainty data exist
 
         "embedded": Boolean,    // They are alongside the data values?

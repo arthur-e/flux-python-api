@@ -182,6 +182,7 @@ class SpatioTemporalMatrix(TransformationInterface):
         self.units = ['degrees', 'degrees']
         self.span = None
         self.timestamp = None
+        self.title = 'Surface Carbon Flux'
         self.transforms = {}
         self.var_name = None
 
@@ -201,7 +202,8 @@ class SpatioTemporalMatrix(TransformationInterface):
             'gridded': True,
             'bbox': bounds,
             'bboxmd5': md5(str(bounds)).hexdigest(),
-            'gridres': self.gridres
+            'gridres': self.gridres,
+            'units': self.units
         }
 
         if getattr(self, 'span', None) is not None:
