@@ -61,6 +61,36 @@
 <h1>Installation and Setup<a class="headerlink" href="#installation-and-setup" title="Permalink to this headline">¶</a></h1>
 <blockquote>
 <div>Just, like, ask the IT guy.</div></blockquote>
+<div class="section" id="installation-within-a-python-virtual-environment-recommended">
+<h2>Installation within a Python Virtual Environment (recommended)<a class="headerlink" href="#installation-within-a-python-virtual-environment-recommended" title="Permalink to this headline">¶</a></h2>
+<p>If you do not already have <strong>virtuelenv</strong> installed, see <a class="reference external" href="http://www.virtualenv.org/en/latest/virtualenv.html#installation">full installation instructions</a>.
+Briefly, using <a class="reference external" href="http://www.pip-installer.org/en/latest/">pip</a>:</p>
+<div class="highlight-python"><div class="highlight"><pre>[sudo] pip install virtualenv
+</pre></div>
+</div>
+<p>Then set up your <strong>virtualenv</strong>, e.g.:</p>
+<div class="highlight-python"><div class="highlight"><pre>cd /where/my/virtualenvs/live/
+virtualenv my_new_virtualenv
+
+# ensure the virtualenv is accessible to non-root users
+sudo chmod -R 775 my_new_virtualenv
+</pre></div>
+</div>
+<p>And activate:</p>
+<div class="highlight-python"><div class="highlight"><pre>source my_new_virtualenv/bin/activate
+</pre></div>
+</div>
+<p>While your shell is activated, run <strong>setup.py</strong> (do <strong>NOT</strong> run as <strong>sudo</strong>):</p>
+<div class="highlight-python"><div class="highlight"><pre>cd /where/my/repo/lives/flux-python-api
+python setup.py install
+</pre></div>
+</div>
+<p>Finally, deactivate the virtual environment:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">deactivate</span>
+</pre></div>
+</div>
+<p>All done!</p>
+</div>
 </div>
 <div class="section" id="loading-data-to-from-mongodb-with-mediators">
 <h1>Loading Data To/From MongoDB with Mediators<a class="headerlink" href="#loading-data-to-from-mongodb-with-mediators" title="Permalink to this headline">¶</a></h1>
@@ -148,7 +178,10 @@ to_csv(hdf5_to_dataframe(&#39;path_to_file.mat&#39;, variable_name)
   <ul>
 <li><a class="reference internal" href="#">Welcome to <strong>flux-python-api</strong> documentation!</a></li>
 <li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
-<li><a class="reference internal" href="#installation-and-setup">Installation and Setup</a></li>
+<li><a class="reference internal" href="#installation-and-setup">Installation and Setup</a><ul>
+<li><a class="reference internal" href="#installation-within-a-python-virtual-environment-recommended">Installation within a Python Virtual Environment (recommended)</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#loading-data-to-from-mongodb-with-mediators">Loading Data To/From MongoDB with Mediators</a></li>
 <li><a class="reference internal" href="#working-with-casa-gfed-flux-data">Working with CASA-GFED Flux Data</a><ul>
 <li><a class="reference internal" href="#importing-from-matlab-hdf5-files">Importing from Matlab/HDF5 Files</a></li>

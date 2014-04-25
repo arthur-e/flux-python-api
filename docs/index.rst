@@ -27,6 +27,37 @@ Installation and Setup
 	Just, like, ask the IT guy.
 
 
+Installation within a Python Virtual Environment (recommended)
+-------------------------------------------------------------
+
+If you do not already have **virtuelenv** installed, see `full installation instructions <http://www.virtualenv.org/en/latest/virtualenv.html#installation>`_.
+Briefly, using `pip <http://www.pip-installer.org/en/latest/>`_::
+
+	[sudo] pip install virtualenv
+
+Then set up your **virtualenv**, e.g.::
+
+	cd /where/my/virtualenvs/live/
+	virtualenv my_new_virtualenv
+	
+	# ensure the virtualenv is accessible to non-root users
+	sudo chmod -R 775 my_new_virtualenv
+
+And activate::
+
+	source my_new_virtualenv/bin/activate
+
+While your shell is activated, run **setup.py** (do **NOT** run as **sudo**)::
+
+	cd /where/my/repo/lives/flux-python-api
+	python setup.py install
+
+Finally, deactivate the virtual environment::
+
+	deactivate
+
+All done!
+
 Loading Data To/From MongoDB with Mediators
 ===========================================
 
