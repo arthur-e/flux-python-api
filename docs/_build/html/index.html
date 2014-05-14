@@ -59,19 +59,19 @@
 </div>
 <div class="section" id="installation-and-setup">
 <h1>Installation and Setup<a class="headerlink" href="#installation-and-setup" title="Permalink to this headline">¶</a></h1>
-<blockquote>
-<div>Just, like, ask the IT guy.</div></blockquote>
-<div class="section" id="installation-without-a-python-virtual-environment">
-<h2>Installation without a Python Virtual Environment<a class="headerlink" href="#installation-without-a-python-virtual-environment" title="Permalink to this headline">¶</a></h2>
-<div class="highlight-python"><div class="highlight"><pre>cd /where/my/repo/lives/flux-python-api
-[sudo] python setup.py install
+<p>Install Git, if need be:</p>
+<div class="highlight-python"><div class="highlight"><pre>sudo apt-get install git
 </pre></div>
 </div>
+<p>And download the package to your preferred installation directory:</p>
+<div class="highlight-python"><div class="highlight"><pre>cd /where/my/repo/lives/
+git clone git@github.com:arthur-e/flux-python-api.git
+</pre></div>
 </div>
-<div class="section" id="installation-within-a-python-virtual-environment-recommended">
-<h2>Installation within a Python Virtual Environment (recommended)<a class="headerlink" href="#installation-within-a-python-virtual-environment-recommended" title="Permalink to this headline">¶</a></h2>
-<p>If you do not already have <strong>virtuelenv</strong> installed, see <a class="reference external" href="http://www.virtualenv.org/en/latest/virtualenv.html#installation">full installation instructions</a>.
-Briefly, using <a class="reference external" href="http://www.pip-installer.org/en/latest/">pip</a>:</p>
+<div class="section" id="installing-within-a-python-virtual-environment-recommended">
+<h2>Installing within a Python Virtual Environment (recommended)<a class="headerlink" href="#installing-within-a-python-virtual-environment-recommended" title="Permalink to this headline">¶</a></h2>
+<p>If you do not already have <strong>virtuelenv</strong> installed, see <a class="reference external" href="http://www.virtualenv.org/en/latest/virtualenv.html#installation">full installation instructions</a>.</p>
+<p>Briefly, using <a class="reference external" href="http://www.pip-installer.org/en/latest/">pip</a>:</p>
 <div class="highlight-python"><div class="highlight"><pre>[sudo] pip install virtualenv
 </pre></div>
 </div>
@@ -97,6 +97,14 @@ python setup.py install
 </pre></div>
 </div>
 <p>All done!</p>
+</div>
+<div class="section" id="installing-without-a-python-virtual-environment">
+<h2>Installing without a Python Virtual Environment<a class="headerlink" href="#installing-without-a-python-virtual-environment" title="Permalink to this headline">¶</a></h2>
+<p>If not using a python virtual environment, simply run <strong>setup.py</strong></p>
+<div class="highlight-python"><div class="highlight"><pre>cd /where/my/repo/lives/flux-python-api
+sudo python setup.py install
+</pre></div>
+</div>
 </div>
 </div>
 <div class="section" id="loading-data-to-from-mongodb-with-mediators">
@@ -186,8 +194,8 @@ to_csv(hdf5_to_dataframe(&#39;path_to_file.mat&#39;, variable_name)
 <li><a class="reference internal" href="#">Welcome to <strong>flux-python-api</strong> documentation!</a></li>
 <li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
 <li><a class="reference internal" href="#installation-and-setup">Installation and Setup</a><ul>
-<li><a class="reference internal" href="#installation-without-a-python-virtual-environment">Installation without a Python Virtual Environment</a></li>
-<li><a class="reference internal" href="#installation-within-a-python-virtual-environment-recommended">Installation within a Python Virtual Environment (recommended)</a></li>
+<li><a class="reference internal" href="#installing-within-a-python-virtual-environment-recommended">Installing within a Python Virtual Environment (recommended)</a></li>
+<li><a class="reference internal" href="#installing-without-a-python-virtual-environment">Installing without a Python Virtual Environment</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#loading-data-to-from-mongodb-with-mediators">Loading Data To/From MongoDB with Mediators</a></li>

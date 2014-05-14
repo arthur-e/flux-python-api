@@ -22,22 +22,19 @@ Indices and tables
 
 Installation and Setup
 ================================
+Install Git, if need be::
 
-	Just, like, ask the IT guy.
+	sudo apt-get install git
+	
+And download the package to your preferred installation directory::
+	
+	cd /where/my/repo/lives/
+	git clone git@github.com:arthur-e/flux-python-api.git
 
-Installation without a Python Virtual Environment 
--------------------------------------------------
-::
-
-	cd /where/my/repo/lives/flux-python-api
-	[sudo] python setup.py install
-
-
-
-Installation within a Python Virtual Environment (recommended)
+Installing within a Python Virtual Environment (recommended)
 -------------------------------------------------------------
-
 If you do not already have **virtuelenv** installed, see `full installation instructions <http://www.virtualenv.org/en/latest/virtualenv.html#installation>`_.
+
 Briefly, using `pip <http://www.pip-installer.org/en/latest/>`_::
 
 	[sudo] pip install virtualenv
@@ -64,6 +61,15 @@ Finally, deactivate the virtual environment::
 	deactivate
 
 All done!
+
+Installing without a Python Virtual Environment 
+-------------------------------------------------
+If not using a python virtual environment, simply run **setup.py** ::
+
+	cd /where/my/repo/lives/flux-python-api
+	sudo python setup.py install
+
+
 
 Loading Data To/From MongoDB with Mediators
 ===========================================

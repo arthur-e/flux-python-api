@@ -64,23 +64,34 @@ class TestSpatioTemporalMatrixes(unittest.TestCase):
         flux = SpatioTemporalMatrix(os.path.join(self.path, 'casagfed2004.mat'),
             timestamp='2004-06-30T00:00:00', var_name='test')
 
-        self.mediator.save('test3', flux)
-        query = self.mediator.client[self.mediator.db_name]['test3'].find({
+        testname = 'test3'
+        self.mediator.save(testname, flux)
+        query = self.mediator.client[self.mediator.db_name][testname].find({
             '_id': datetime.datetime(2004, 6, 30, 0, 0, 0),
         })
         self.assertEqual(len(query[0]['values']), 10)
         self.assertEqual(query[0]['values'][0], 0.08)
 
+        # test the mediator's summarize() method
+        summary = self.mediator.summarize(testname)
+        expected_summary = { 'max': 0.27000000000000002,
+                             'mean': 0.14924999999999999,
+                             'median': 0.15000000000000002,
+                             'min': 0.0,
+                             'std': 0.0044658511197943991}
+        
+        self.assertEqual(summary, expected_summary)
+
+
         # Drop the old collection; it will be recreated when inserting
-        self.mediator.client[self.mediator.db_name].drop_collection('test3')
+        self.mediator.client[self.mediator.db_name].drop_collection(testname)
         self.mediator.client[self.mediator.db_name]['coord_index'].remove({
-            '_id': 'test3'
+            '_id': testname
         })
         self.mediator.client[self.mediator.db_name]['metadata'].remove({
-            '_id': 'test3'
+            '_id': testname
         })
-
-
+    
 class TestXCO2Data(unittest.TestCase):
     '''Tests for proper handling of XCO2 retrievals'''
 
@@ -163,20 +174,32 @@ class TestKrigedXCO2Data(unittest.TestCase):
         xco2 = KrigedXCO2Matrix(os.path.join(self.path, 'kriged_xco2.mat'),
             timestamp='2009-06-15')
 
-        self.mediator.save('test2', xco2)
-        query = self.mediator.client[self.mediator.db_name]['test2'].find({
+        testname = 'test2'
+        self.mediator.save(testname, xco2)
+        query = self.mediator.client[self.mediator.db_name][testname].find({
             '_id': datetime.datetime(2009, 6, 15, 0, 0, 0),
         })
         self.assertEqual(query[0]['_span'], 518400)
         self.assertEqual(len(query[0]['values']), 14210)
 
+        # test the mediator's summarize() method
+        summary = self.mediator.summarize(testname)
+        expected_summary = { 'max': 0.27000000000000002,
+                             'mean': 0.14924999999999999,
+                             'median': 0.15000000000000002,
+                             'min': 0.0,
+                             'std': 0.0044658511197943991}
+        
+        self.assertEqual(summary, expected_summary)
+
+
         # Drop the old collection; it will be recreated when inserting
-        self.mediator.client[self.mediator.db_name].drop_collection('test2')
+        self.mediator.client[self.mediator.db_name].drop_collection(testname)
         self.mediator.client[self.mediator.db_name]['coord_index'].remove({
-            '_id': 'test2'
+            '_id': testname
         })
         self.mediator.client[self.mediator.db_name]['metadata'].remove({
-            '_id': 'test2'
+            '_id': testname
         })
 
 
