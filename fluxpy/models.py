@@ -22,7 +22,7 @@ Example JSON configuration file for a model:
     },
     "timestamp": null, # The ISO 8601 timestamp
     "units": [], # The units of measurement, in order
-    "var_name": null, # The Matlab/HDF5 variable of interst
+    "var_name": null, # The Matlab/HDF5 variable of interest
 }
 '''
 
@@ -57,7 +57,7 @@ class TransformationInterface(object):
     path_regex = re.compile(r'.+\.(?P<extension>mat|h5)')
     var_regex = re.compile(r'^(?!__).*(?!__)$') # Skips __private__ variable names
 
-    def __init__(self, path, *args, **kwargs):
+    def __init__(self, path, config_file=None, *args, **kwargs):
         self.config = dict()
 
         if self.path_regex.match(path) is None:
@@ -69,14 +69,13 @@ class TransformationInterface(object):
         else:
             self.file_handler = h5py.File
 
-        # Check to see if a config file with the same name exists
-        config = os.path.join('.'.join(path.split('.')[:-1]), '.json')
+        # If config_file not specified, check to see if a config file with the same name exists
+        config = config_file if config_file else '.'.join(path.split('.')[:-1]) + '.json'
         if os.path.exists(config):
             self.config = json.load(open(config, 'rb'))
 
         # Update and apply the configuration options as attributes
         self.__configure__(**kwargs)
-
         # Open the hierarchical file
         self.__open__(path)
             
@@ -165,7 +164,7 @@ class SpatioTemporalMatrix(TransformationInterface):
     A generic matrix with two spatial dimensions in the first two columns and
     an arbitrary number of columns following each representing one step in time.
     '''
-    def __init__(self, path, *args, **kwargs):
+    def __init__(self, path, config_file=None, *args, **kwargs):
         self.columns = ['x', 'y']
         self.formats = {
             'x': '%.5f',
@@ -184,9 +183,9 @@ class SpatioTemporalMatrix(TransformationInterface):
         self.timestamp = None
         self.title = 'Surface Carbon Flux'
         self.transforms = {}
-        self.var_name = None
+        #self.var_name = None
 
-        super(SpatioTemporalMatrix, self).__init__(path, *args, **kwargs)
+        super(SpatioTemporalMatrix, self).__init__(path, config_file, *args, **kwargs)
 
     def describe(self, df=None, **kwargs):
         if df is None:
