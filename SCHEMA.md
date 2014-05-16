@@ -78,6 +78,12 @@ the data model (TransformationInterface) is compatible.
         "type": ("Point"|"LineString"|"Polygon")
 
     },
+    
+    "gridres": {
+    	"units": String			// Grid cell units 
+    	"x": Number				// Grid cell resolution in the x direction
+    	"y": Number				// Grid cell resolution in the y direction
+    },
 
     "header": [String],         // Array of human-readable column headers, in order
 

@@ -53,7 +53,6 @@ def main(argv):
         elif opt in ('-n', '--var_name'):
             kwargs['var_name'] = arg
         elif opt in ('-c', '--config_file'):
-            print 'ooo'
             kwargs['config_file'] = arg
 
     # remove the empty args from kwargs
