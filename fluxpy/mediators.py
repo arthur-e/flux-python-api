@@ -36,6 +36,7 @@ class Mediator(object):
         self.db_name = db_name # The name of the MongoDB database
 
     def __get_updates__(self, query, metadata):
+        # Updates the metadata in the passed MongoDB query
         last_metadata = query.next()
         update_selection = {}
 
@@ -89,7 +90,7 @@ class ImpliedGridMediator(Mediator):
     '''
     Mediator for what is essentially a matrix with only an implied grid--no
     spatial coordinate index (yet). Uses the coordinate index from an existing
-    collection, specified as a new first argumet; can use the target
+    collection, specified as a new first argument; can use the target
     collection name for this new required first argument if the target
     collection already exists.
     '''
@@ -175,7 +176,6 @@ class Grid4DMediator(Mediator):
     time steps (frames). Geometry expected as grid centroids (e.g. centroids
     of 1-degree grid cells).
     '''
-    values_precision = 2 #FIXME Should be done in the model
 
     def load(self, collection_name, query):
         # Retrieve a cursor to iterate over the records matching the query
@@ -225,12 +225,18 @@ class Grid4DMediator(Mediator):
 
         # Iterate over the transpose of the data frame
         for timestamp, series in df.T.iterrows():
-            j = self.client[self.db_name][collection_name].insert({
-                '_id': timestamp,
-                'values': [
-                    round(kv[1], self.values_precision) for kv in series.iterkv()
-                ]
-            })
+            if getattr(instance, 'precision', None) is not None:
+                self.client[self.db_name][collection_name].insert({
+                    '_id': timestamp,
+                    'values': map(lambda x: round(x[1], instance.precision),
+                        series.iterkv())
+                })
+
+            else:
+                self.client[self.db_name][collection_name].insert({
+                    '_id': timestamp,
+                    'values': series.tolist()
+                })
 
         # Get the metadata; assume they are all the same
         metadata = instance.describe(df)
@@ -239,14 +245,25 @@ class Grid4DMediator(Mediator):
         metadata['_id'] = collection_name
         metadata['stats'] = self.summarize(collection_name)
 
-
-        if self.client[self.db_name]['metadata'].find({
+        # Find or create metadata; if it already exists, update it based on the
+        #   the new values in the time series being considered
+        query = self.client[self.db_name]['metadata'].find({
             '_id': collection_name
-        }).count() == 0:
+        })
+        if query.count() == 0:
             self.client[self.db_name]['metadata'].insert(metadata)
 
         else:
             update_selection = self.__get_updates__(query, metadata)
+
+            # If anything's changed, update the database!
+            if len(update_selection.items()) != 0:
+                # Update the metadata
+                self.client[self.db_name]['metadata'].update({
+                    '_id': collection_name
+                }, {
+                    '$set': update_selection
+                })
 
     def summarize(self, collection_name, query={}):
         df = self.load(collection_name, query)

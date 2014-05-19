@@ -165,6 +165,7 @@ class SpatioTemporalMatrix(TransformationInterface):
     an arbitrary number of columns following each representing one step in time.
     '''
     def __init__(self, path, config_file=None, *args, **kwargs):
+        self.precision = 5 #TODO Add to schema
         self.columns = ['x', 'y']
         self.formats = {
             'x': '%.5f',
@@ -183,7 +184,6 @@ class SpatioTemporalMatrix(TransformationInterface):
         self.timestamp = None
         self.title = 'Surface Carbon Flux'
         self.transforms = {}
-        #self.var_name = None
 
         super(SpatioTemporalMatrix, self).__init__(path, config_file, *args, **kwargs)
 
@@ -263,7 +263,7 @@ class SpatioTemporalMatrix(TransformationInterface):
 class XCO2Matrix(TransformationInterface):
     '''
     Understands XCO2 data as formatted--Typically 6-day spans of XCO2
-    concentrations (ppm) at daily steps on a latitude-longitude grid.
+    concentrations (ppm).
     Matrix dimensions: 1,311 (observations) x 6 (attributes).
     Columns: Longitude, latitude, XCO2 concentration (ppm), day of the year,
     year, retrieval error (ppm).
