@@ -239,6 +239,7 @@ class Grid4DMediator(Mediator):
         metadata['_id'] = collection_name
         metadata['stats'] = self.summarize(collection_name)
 
+
         if self.client[self.db_name]['metadata'].find({
             '_id': collection_name
         }).count() == 0:
@@ -332,27 +333,38 @@ class Grid3DMediator(Mediator):
             
         j = self.client[self.db_name][collection_name].insert(data_dict)
 
-    def summarize(self, model, collection_name, query={}):
-        dfs = self.load_from_db(collection_name, query)
-        
-        # Merge them into a single, large data frame
-        df = pd.concat(dfs)
-        
-        summary = {
-            '_id': collection_name
+    def summarize(self,collection_name, query={}):
+#         dfs = self.load_from_db(collection_name, query)
+#         
+#         # Merge them into a single, large data frame
+#         df = pd.concat(dfs)
+#         
+#         summary = {
+#             '_id': collection_name
+#         }
+#         
+#         for param in model.parameters:
+#             # Axis 0 is the "row-wise" axis
+#             summary[param] = {
+#                 'mean': df.mean(0)[param],
+#                 'min': df.min(0)[param],
+#                 'max': df.max(0)[param],
+#                 'std': df.std(0)[param],
+#                 'median': df.median(0)[param]
+#             }
+#         
+#             def summarize(self, collection_name, query={}):
+        df = self.load(collection_name, query)
+
+        return { # Axis 0 is the "row-wise" axis
+            'mean': df.mean(0).mean(),
+            'min': df.min(0).min(),
+            'max': df.max(0).max(),
+            'std': df.std(0).std(),
+            'median': df.median(0).median()
         }
-        
-        for param in model.parameters:
-            # Axis 0 is the "row-wise" axis
-            summary[param] = {
-                'mean': df.mean(0)[param],
-                'min': df.min(0)[param],
-                'max': df.max(0)[param],
-                'std': df.std(0)[param],
-                'median': df.median(0)[param]
-            }
-            
-        return summary
+
+        #return summary
         
 
 class Unstructured3DMediator(Mediator):

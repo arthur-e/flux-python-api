@@ -3,24 +3,15 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to **flux-python-api** documentation!
+**flux-python-api**
 =============================================
 
-Contents: buncha stuff!
+Contents: Documentation on installing and using **flux-python-api**.
 
 .. toctree::
    :maxdepth: 2
 
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
-
-
-Installation and Setup
+**Installation and Setup**
 ================================
 Install Git, if need be::
 
@@ -71,86 +62,102 @@ If not using a python virtual environment, simply run **setup.py** ::
 
 
 
-Loading Data To/From MongoDB with Mediators
-===========================================
-
-Given the examples of gridded (kriged) and not-gridded XCO2 data, here is the
-process for loading these data into the MongoDB database::
-
-    from fluxpy.mediators import Grid3DMediator
-    from fluxpy.models import XCO2Matrix
-    
-    # The mediator understands how 3D gridded data should be stored
-    mediator = Grid3DMediator()
-    
-    # Create an instance of the XCO2Matrix data model; parameters are loaded
-    #   from a parameter file with the same name (e.g. xco2_data.json) if it
-    #   exists but otherwise are set as optional keyword arguments
-    xco2 = KrigedXCO2Matrix('xco2_data.mat', timestamp='2009-06-15')
-    
-    # Add the instance to our mediator and save it to the database using
-    #   the collection name provided
-    mediator.add(xco2).save_to_db('my_xco2_data')
-
-
-Working with CASA-GFED Flux Data
+**Loading data**
 ================================
 
+Use the **load.py** utility to load flux data from files that are in Matlab (*\*.mat*) or HDF5 (*\*.h5* or *\*.mat*) format. A description of the required configuration file and examples are provided in the next sections. 
 
-Importing from Matlab/HDF5 Files
---------------------------------
+Usage::
 
-You can import directly from an older Matlab file using `scipy.io`::
-
-    mat = scipy.io.loadmat('/path/to/file.mat')
-
-    # Variables are indexed by their names:
-    my_variable = mat['my_variable']
-
-Tools are available for a importing both Matlab and HDF5 model data in a more manageable (transposed) format, where the model windows (in time) are rows of the table and model cells are the columns::
-
-    from casagfed.io import mat_to_dataframe, hdf5_to_dataframe
-
-    # Get a pandas Data Frame in return; skips the first 2 columns (e.g. latitude and longitude)
-    df = mat_to_dataframe('/path/to/file.mat', variable_name)
-
-    # Same procedure for HDF5 files
-    df = hdf5_to_dataframe('/path/to/file.mat', variable_name)
-
-The `variable_name` is the Matlab variable name of the matrix for which you want to get a CSV.
+	load.py -i <inputfile> [OPTIONAL ARGUMENTS]
+    
+	Required argument:
+	    -i, --ifile          Input file in Matlab (*.mat) or HDF5 (*.h5 or *.mat) format 
+	
+	Optional arguments:
+	    -c, --config_file    Specify location of json config file. By default, uses
+	                         input file w/ .json extension.
+	
+	These optional args can be used to override specifications of the config file:
+	    -n, --var_name       The name of the variable in the hierarchical file
+	                         that stores the data
+	    -t, --timestamp      An ISO 8601 timestamp for the first observation
 
 
-Exporting to CSV
-----------------
+The configuration file
+----------------------
 
-For older Matlab files::
+This utility requires that the input *\*.h5* or *\*.mat* file be accompanied by a JSON configuration file specifying required metadata parameters.
+By default, the utility will look for a *\*.json* file with the same name as the data file, but you can specify an alternate location when using **load.py** by using the **-c** option.
 
-    mat = scipy.io.loadmat('/path/to/file.mat')
-    df = pd.DataFrame(mat[variable_name])
-    df.to_csv('output_filename.csv')
+Configuration file parameter schema::
 
-For HDF5 files, again generating a transposed matrix from the original::
+    "columns": [String],        // Array of well-known column identifiers, in order
+                                // e.g. "x", "y", "value", "error"
 
-    from casagfed.io import hdf5_to_dataframe, to_csv
+    "gridres": {
+    	"units": String,        // Grid cell units 
+    	"x": Number,            // Grid cell resolution in the x direction
+    	"y": Number             // Grid cell resolution in the y direction
+    },
+    	
+    "header": [String],         // Array of human-readable column headers, in order
 
-    # Writes a CSV file in the current directory; skips the first 2 columns (e.g. latitude and longitude)
-    to_csv(hdf5_to_dataframe('path_to_file.mat', variable_name)
+    "parameters": [String],     // Array of well-known variable names e.g.
+                                // "values", "value", "errors" or "error"
 
-In each case, the `variable_name` is the Matlab variable name of the matrix for which you want to get a CSV.
+    "span": String,             // The length of time, as a Pandas "freq" code, 
+                                // that an observation spans
+
+    "step": Number,             // The length of time, in seconds, between each
+                                // observation to be imported
+
+    "timestamp": String,        // An ISO 8601 timestamp for the first observation
+
+    "title": String,            // Human-readable "pretty" name for the data set 
+    
+    "units": [String],          // Array of units for each field, in order
+
+    "var_name": String         	// The name of the variable in the hierarchical
+                                // file which stores the data
 
 
-MongoDB Administration
-======================
+Contents of an example configuration file are shown here::
 
-Insertion
----------
+	{
+	    "columns": ["x","y"],       
+	    "gridres": {
+			"units": "degrees",
+			"x": 1.0,
+			"y": 1.0
+		},
+	    "header": ["lng","lat"],  
+	    "parameters": ["value","error"],
+	    "span": "",           
+	    "step": 10800,
+	    "timestamp": "2012-12-22T03:00:00",
+	    "title": "Surface Carbon Flux",
+	    "units": ["degrees","degrees"],
+	    "var_name": "casa_gfed_2004"
+	}
 
-Tools are available for performing a bulk insert into MongoDB; here we assume a non-HDF5 Matlab file::
 
-    from casagfed.mongodb import insert_bulk
+Example usage of **load.py**
+-----------------------------
 
-    # The starting date and time need to be provided as a datetime.datetime instance
-    insert_bulk('/path/to/file.mat', variable_name, dt=datetime.datetime(2004, 1, 1))
+Most basic example; assumes a configuration file exists at *~/mydata/data_casa_gfed_3hrly.json*)::
+	
+	load.py -i ~/mydata/data_casa_gfed_3hrly.mat
+		
+Using command line arguments to override configuration file parameters *var_name* and *timestamp*::
+
+    load.py -i ~/mydata/data_casa_gfed_3hrly.mat -t 2003-12-22T03:00:00 -n casa_gfed_2004
+    
+Specifying a configuration file at a non-default location::
+
+	load.py -i ~/mydata/data_casa_gfed_3hrly.mat -c -i ~/mydata/my_config_file.json
+
+
     
 
 

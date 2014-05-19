@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>Welcome to flux-python-api documentation! &mdash; flux-python-api 0.01 documentation</title>
+    <title>flux-python-api &mdash; flux-python-api 0.01 documentation</title>
     
     <link rel="stylesheet" href="_static/default.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -41,24 +41,16 @@
         <div class="bodywrapper">
           <div class="body">
             
-  <div class="section" id="welcome-to-flux-python-api-documentation">
-<h1>Welcome to <strong>flux-python-api</strong> documentation!<a class="headerlink" href="#welcome-to-flux-python-api-documentation" title="Permalink to this headline">¶</a></h1>
-<p>Contents: buncha stuff!</p>
+  <div class="section" id="flux-python-api">
+<h1><strong>flux-python-api</strong><a class="headerlink" href="#flux-python-api" title="Permalink to this headline">¶</a></h1>
+<p>Contents: Documentation on installing and using <strong>flux-python-api</strong>.</p>
 <div class="toctree-wrapper compound">
 <ul class="simple">
 </ul>
 </div>
 </div>
-<div class="section" id="indices-and-tables">
-<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
-<ul class="simple">
-<li><a class="reference internal" href="genindex.html"><em>Index</em></a></li>
-<li><a class="reference internal" href="py-modindex.html"><em>Module Index</em></a></li>
-<li><a class="reference internal" href="search.html"><em>Search Page</em></a></li>
-</ul>
-</div>
 <div class="section" id="installation-and-setup">
-<h1>Installation and Setup<a class="headerlink" href="#installation-and-setup" title="Permalink to this headline">¶</a></h1>
+<h1><strong>Installation and Setup</strong><a class="headerlink" href="#installation-and-setup" title="Permalink to this headline">¶</a></h1>
 <p>Install Git, if need be:</p>
 <div class="highlight-python"><div class="highlight"><pre>sudo apt-get install git
 </pre></div>
@@ -107,77 +99,92 @@ sudo python setup.py install
 </div>
 </div>
 </div>
-<div class="section" id="loading-data-to-from-mongodb-with-mediators">
-<h1>Loading Data To/From MongoDB with Mediators<a class="headerlink" href="#loading-data-to-from-mongodb-with-mediators" title="Permalink to this headline">¶</a></h1>
-<p>Given the examples of gridded (kriged) and not-gridded XCO2 data, here is the
-process for loading these data into the MongoDB database:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">fluxpy.mediators</span> <span class="kn">import</span> <span class="n">Grid3DMediator</span>
-<span class="kn">from</span> <span class="nn">fluxpy.models</span> <span class="kn">import</span> <span class="n">XCO2Matrix</span>
+<div class="section" id="loading-data">
+<h1><strong>Loading data</strong><a class="headerlink" href="#loading-data" title="Permalink to this headline">¶</a></h1>
+<p>Use the <strong>load.py</strong> utility to load flux data from files that are in Matlab (<em>*.mat</em>) or HDF5 (<em>*.h5</em> or <em>*.mat</em>) format. A description of the required configuration file and examples are provided in the next sections.</p>
+<p>Usage:</p>
+<div class="highlight-python"><div class="highlight"><pre>load.py -i &lt;inputfile&gt; [OPTIONAL ARGUMENTS]
 
-<span class="c"># The mediator understands how 3D gridded data should be stored</span>
-<span class="n">mediator</span> <span class="o">=</span> <span class="n">Grid3DMediator</span><span class="p">()</span>
+Required argument:
+    -i, --ifile          Input file in Matlab (*.mat) or HDF5 (*.h5 or *.mat) format
 
-<span class="c"># Create an instance of the XCO2Matrix data model; parameters are loaded</span>
-<span class="c">#   from a parameter file with the same name (e.g. xco2_data.json) if it</span>
-<span class="c">#   exists but otherwise are set as optional keyword arguments</span>
-<span class="n">xco2</span> <span class="o">=</span> <span class="n">KrigedXCO2Matrix</span><span class="p">(</span><span class="s">&#39;xco2_data.mat&#39;</span><span class="p">,</span> <span class="n">timestamp</span><span class="o">=</span><span class="s">&#39;2009-06-15&#39;</span><span class="p">)</span>
+Optional arguments:
+    -c, --config_file    Specify location of json config file. By default, uses
+                         input file w/ .json extension.
 
-<span class="c"># Add the instance to our mediator and save it to the database using</span>
-<span class="c">#   the collection name provided</span>
-<span class="n">mediator</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">xco2</span><span class="p">)</span><span class="o">.</span><span class="n">save_to_db</span><span class="p">(</span><span class="s">&#39;my_xco2_data&#39;</span><span class="p">)</span>
+These optional args can be used to override specifications of the config file:
+    -n, --var_name       The name of the variable in the hierarchical file
+                         that stores the data
+    -t, --timestamp      An ISO 8601 timestamp for the first observation
+</pre></div>
+</div>
+<div class="section" id="the-configuration-file">
+<h2>The configuration file<a class="headerlink" href="#the-configuration-file" title="Permalink to this headline">¶</a></h2>
+<p>This utility requires that the input <em>*.h5</em> or <em>*.mat</em> file be accompanied by a JSON configuration file specifying required metadata parameters.
+By default, the utility will look for a <em>*.json</em> file with the same name as the data file, but you can specify an alternate location when using <strong>load.py</strong> by using the <strong>-c</strong> option.</p>
+<p>Configuration file parameter schema:</p>
+<div class="highlight-python"><div class="highlight"><pre>&quot;columns&quot;: [String],        // Array of well-known column identifiers, in order
+                            // e.g. &quot;x&quot;, &quot;y&quot;, &quot;value&quot;, &quot;error&quot;
+
+&quot;gridres&quot;: {
+    &quot;units&quot;: String,        // Grid cell units
+    &quot;x&quot;: Number,            // Grid cell resolution in the x direction
+    &quot;y&quot;: Number             // Grid cell resolution in the y direction
+},
+
+&quot;header&quot;: [String],         // Array of human-readable column headers, in order
+
+&quot;parameters&quot;: [String],     // Array of well-known variable names e.g.
+                            // &quot;values&quot;, &quot;value&quot;, &quot;errors&quot; or &quot;error&quot;
+
+&quot;span&quot;: String,             // The length of time, as a Pandas &quot;freq&quot; code,
+                            // that an observation spans
+
+&quot;step&quot;: Number,             // The length of time, in seconds, between each
+                            // observation to be imported
+
+&quot;timestamp&quot;: String,        // An ISO 8601 timestamp for the first observation
+
+&quot;title&quot;: String,            // Human-readable &quot;pretty&quot; name for the data set
+
+&quot;units&quot;: [String],          // Array of units for each field, in order
+
+&quot;var_name&quot;: String          // The name of the variable in the hierarchical
+                            // file which stores the data
+</pre></div>
+</div>
+<p>Contents of an example configuration file are shown here:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="p">{</span>
+    <span class="s">&quot;columns&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;x&quot;</span><span class="p">,</span><span class="s">&quot;y&quot;</span><span class="p">],</span>
+    <span class="s">&quot;gridres&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s">&quot;units&quot;</span><span class="p">:</span> <span class="s">&quot;degrees&quot;</span><span class="p">,</span>
+                <span class="s">&quot;x&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+                <span class="s">&quot;y&quot;</span><span class="p">:</span> <span class="mf">1.0</span>
+        <span class="p">},</span>
+    <span class="s">&quot;header&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;lng&quot;</span><span class="p">,</span><span class="s">&quot;lat&quot;</span><span class="p">],</span>
+    <span class="s">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;value&quot;</span><span class="p">,</span><span class="s">&quot;error&quot;</span><span class="p">],</span>
+    <span class="s">&quot;span&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>
+    <span class="s">&quot;step&quot;</span><span class="p">:</span> <span class="mi">10800</span><span class="p">,</span>
+    <span class="s">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s">&quot;2012-12-22T03:00:00&quot;</span><span class="p">,</span>
+    <span class="s">&quot;title&quot;</span><span class="p">:</span> <span class="s">&quot;Surface Carbon Flux&quot;</span><span class="p">,</span>
+    <span class="s">&quot;units&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;degrees&quot;</span><span class="p">,</span><span class="s">&quot;degrees&quot;</span><span class="p">],</span>
+    <span class="s">&quot;var_name&quot;</span><span class="p">:</span> <span class="s">&quot;casa_gfed_2004&quot;</span>
+<span class="p">}</span>
 </pre></div>
 </div>
 </div>
-<div class="section" id="working-with-casa-gfed-flux-data">
-<h1>Working with CASA-GFED Flux Data<a class="headerlink" href="#working-with-casa-gfed-flux-data" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="importing-from-matlab-hdf5-files">
-<h2>Importing from Matlab/HDF5 Files<a class="headerlink" href="#importing-from-matlab-hdf5-files" title="Permalink to this headline">¶</a></h2>
-<p>You can import directly from an older Matlab file using <cite>scipy.io</cite>:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">mat</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">loadmat</span><span class="p">(</span><span class="s">&#39;/path/to/file.mat&#39;</span><span class="p">)</span>
-
-<span class="c"># Variables are indexed by their names:</span>
-<span class="n">my_variable</span> <span class="o">=</span> <span class="n">mat</span><span class="p">[</span><span class="s">&#39;my_variable&#39;</span><span class="p">]</span>
+<div class="section" id="example-usage-of-load-py">
+<h2>Example usage of <strong>load.py</strong><a class="headerlink" href="#example-usage-of-load-py" title="Permalink to this headline">¶</a></h2>
+<p>Most basic example; assumes a configuration file exists at <em>~/mydata/data_casa_gfed_3hrly.json</em>):</p>
+<div class="highlight-python"><div class="highlight"><pre>load.py -i ~/mydata/data_casa_gfed_3hrly.mat
 </pre></div>
 </div>
-<p>Tools are available for a importing both Matlab and HDF5 model data in a more manageable (transposed) format, where the model windows (in time) are rows of the table and model cells are the columns:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">casagfed.io</span> <span class="kn">import</span> <span class="n">mat_to_dataframe</span><span class="p">,</span> <span class="n">hdf5_to_dataframe</span>
-
-<span class="c"># Get a pandas Data Frame in return; skips the first 2 columns (e.g. latitude and longitude)</span>
-<span class="n">df</span> <span class="o">=</span> <span class="n">mat_to_dataframe</span><span class="p">(</span><span class="s">&#39;/path/to/file.mat&#39;</span><span class="p">,</span> <span class="n">variable_name</span><span class="p">)</span>
-
-<span class="c"># Same procedure for HDF5 files</span>
-<span class="n">df</span> <span class="o">=</span> <span class="n">hdf5_to_dataframe</span><span class="p">(</span><span class="s">&#39;/path/to/file.mat&#39;</span><span class="p">,</span> <span class="n">variable_name</span><span class="p">)</span>
+<p>Using command line arguments to override configuration file parameters <em>var_name</em> and <em>timestamp</em>:</p>
+<div class="highlight-python"><div class="highlight"><pre>load.py -i ~/mydata/data_casa_gfed_3hrly.mat -t 2003-12-22T03:00:00 -n casa_gfed_2004
 </pre></div>
 </div>
-<p>The <cite>variable_name</cite> is the Matlab variable name of the matrix for which you want to get a CSV.</p>
-</div>
-<div class="section" id="exporting-to-csv">
-<h2>Exporting to CSV<a class="headerlink" href="#exporting-to-csv" title="Permalink to this headline">¶</a></h2>
-<p>For older Matlab files:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">mat</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">loadmat</span><span class="p">(</span><span class="s">&#39;/path/to/file.mat&#39;</span><span class="p">)</span>
-<span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">mat</span><span class="p">[</span><span class="n">variable_name</span><span class="p">])</span>
-<span class="n">df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="s">&#39;output_filename.csv&#39;</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>For HDF5 files, again generating a transposed matrix from the original:</p>
-<div class="highlight-python"><div class="highlight"><pre>from casagfed.io import hdf5_to_dataframe, to_csv
-
-# Writes a CSV file in the current directory; skips the first 2 columns (e.g. latitude and longitude)
-to_csv(hdf5_to_dataframe(&#39;path_to_file.mat&#39;, variable_name)
-</pre></div>
-</div>
-<p>In each case, the <cite>variable_name</cite> is the Matlab variable name of the matrix for which you want to get a CSV.</p>
-</div>
-</div>
-<div class="section" id="mongodb-administration">
-<h1>MongoDB Administration<a class="headerlink" href="#mongodb-administration" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="insertion">
-<h2>Insertion<a class="headerlink" href="#insertion" title="Permalink to this headline">¶</a></h2>
-<p>Tools are available for performing a bulk insert into MongoDB; here we assume a non-HDF5 Matlab file:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">casagfed.mongodb</span> <span class="kn">import</span> <span class="n">insert_bulk</span>
-
-<span class="c"># The starting date and time need to be provided as a datetime.datetime instance</span>
-<span class="n">insert_bulk</span><span class="p">(</span><span class="s">&#39;/path/to/file.mat&#39;</span><span class="p">,</span> <span class="n">variable_name</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2004</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<p>Specifying a configuration file at a non-default location:</p>
+<div class="highlight-python"><div class="highlight"><pre>load.py -i ~/mydata/data_casa_gfed_3hrly.mat -c -i ~/mydata/my_config_file.json
 </pre></div>
 </div>
 </div>
@@ -191,21 +198,15 @@ to_csv(hdf5_to_dataframe(&#39;path_to_file.mat&#39;, variable_name)
         <div class="sphinxsidebarwrapper">
   <h3><a href="#">Table Of Contents</a></h3>
   <ul>
-<li><a class="reference internal" href="#">Welcome to <strong>flux-python-api</strong> documentation!</a></li>
-<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
-<li><a class="reference internal" href="#installation-and-setup">Installation and Setup</a><ul>
+<li><a class="reference internal" href="#"><strong>flux-python-api</strong></a></li>
+<li><a class="reference internal" href="#installation-and-setup"><strong>Installation and Setup</strong></a><ul>
 <li><a class="reference internal" href="#installing-within-a-python-virtual-environment-recommended">Installing within a Python Virtual Environment (recommended)</a></li>
 <li><a class="reference internal" href="#installing-without-a-python-virtual-environment">Installing without a Python Virtual Environment</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#loading-data-to-from-mongodb-with-mediators">Loading Data To/From MongoDB with Mediators</a></li>
-<li><a class="reference internal" href="#working-with-casa-gfed-flux-data">Working with CASA-GFED Flux Data</a><ul>
-<li><a class="reference internal" href="#importing-from-matlab-hdf5-files">Importing from Matlab/HDF5 Files</a></li>
-<li><a class="reference internal" href="#exporting-to-csv">Exporting to CSV</a></li>
-</ul>
-</li>
-<li><a class="reference internal" href="#mongodb-administration">MongoDB Administration</a><ul>
-<li><a class="reference internal" href="#insertion">Insertion</a></li>
+<li><a class="reference internal" href="#loading-data"><strong>Loading data</strong></a><ul>
+<li><a class="reference internal" href="#the-configuration-file">The configuration file</a></li>
+<li><a class="reference internal" href="#example-usage-of-load-py">Example usage of <strong>load.py</strong></a></li>
 </ul>
 </li>
 </ul>
