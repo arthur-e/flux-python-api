@@ -32,11 +32,16 @@ Last updated: April 25, 2014.
     "bbox": [Number() minx, miny, maxx, maxy],
 
     "stats": {                  // Summary statistics for the population
-        "std": Number,
-        "max": Number,
-        "min": Number,
-        "median": Number,
-        "mean": Number
+        "values": {             //  of each parameter; must include the "values"
+            "std": Number,      //  parameter but can optionally include others
+            "max": Number,
+            "min": Number,
+            "median": Number,
+            "mean": Number
+        },
+        "errors": {
+            ...
+        }
     },
 
     "spans": [String],          // Array of lengths of time as Pandas "freq" codes
@@ -156,11 +161,16 @@ the data model (TransformationInterface) is compatible.
                                 // "values", "value", "errors" or "error"
 
     "stats": {                  // Summary statistics for the population
-        "std": Number,
-        "max": Number,
-        "min": Number,
-        "median": Number,
-        "mean": Number
+        "values": {             //  of each parameter; must include the "values"
+            "std": Number,      //  parameter but can optionally include others
+            "max": Number,
+            "min": Number,
+            "median": Number,
+            "mean": Number
+        },
+        "errors": {
+            ...
+        }
     },
 
     "span": Number,             // The length of time, in seconds, that an

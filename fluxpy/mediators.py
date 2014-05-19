@@ -8,6 +8,7 @@ xco2 = KrigedXCO2Matrix('xco2_data.mat', timestamp='2009-06-15')
 mediator.add(xco2).save_to_db('my_xco2_data')
 '''
 
+import ipdb#FIXME
 import datetime
 import os
 import re
@@ -85,90 +86,6 @@ class Mediator(object):
             raise ValueError('The collection name provided is a reserved name')
 
 
-#TODO Compare to Grid4DMediator to make them both more DRY
-class ImpliedGridMediator(Mediator):
-    '''
-    Mediator for what is essentially a matrix with only an implied grid--no
-    spatial coordinate index (yet). Uses the coordinate index from an existing
-    collection, specified as a new first argument; can use the target
-    collection name for this new required first argument if the target
-    collection already exists.
-    '''
-    def __init__(self, coord_index_name=None, **kwargs):
-        # Requires: Specify the name of a collection that already has a
-        #   coordinate index
-        self.coord_index_name = coord_index_name
-
-        super(ImpliedGridMediator, self).__init__(**kwargs)
-
-    def save(self, collection_name, instance):
-        super(ImpliedGridMediator, self).save(collection_name, instance)
-
-        df = instance.extract()
-
-        # Create the index of grid cell coordinates, if needed
-        if self.client[self.db_name]['coord_index'].find({
-            '_id': collection_name
-        }).count() == 0:
-            coords = self.client[self.db_name]['coord_index'].find({
-                '_id': self.coord_index_name or collection_name
-            }).next()['i']
-
-            k = self.client[self.db_name]['coord_index'].insert({
-                '_id': collection_name,
-                'i': coords
-            })
-
-        for i, series in df.iterrows():
-            if instance.precision is not None:
-                self.client[self.db_name][collection_name].insert({
-                    '_id': '%s_%d' % (instance.timestamp, i),
-                    'values': map(lambda x: round(x, instance.precision),
-                        series.tolist())
-                })
-
-            else:
-                self.client[self.db_name][collection_name].insert({
-                    '_id': '%s_%d' % (instance.timestamp, i),
-                    'values': series.tolist()
-                })
-
-        # Get the metadata; assume they are all the same
-        metadata = instance.describe(df)
-
-        # Set the unique identifier; include the summary statistics
-        metadata['_id'] = collection_name
-        metadata['stats'] = self.summarize(collection_name)
-
-        if self.client[self.db_name]['metadata'].find({
-            '_id': collection_name
-        }).count() == 0:
-            self.client[self.db_name]['metadata'].insert(metadata)
-
-        else:
-            update_selection = self.__get_updates__(query, metadata)
-
-            # If anything's changed, update the database!
-            if len(update_selection.items()) != 0:
-                # Update the metadata
-                self.client[self.db_name]['metadata'].update({
-                    '_id': collection_name
-                }, {
-                    '$set': update_selection
-                })
-
-    def summarize(self, collection_name, query={}):
-        df = self.load(collection_name, query)#TODO load() method
-
-        return { # Axis 0 is the "row-wise" axis
-            'mean': df.mean(0).mean(),
-            'min': df.min(0).min(),
-            'max': df.max(0).max(),
-            'std': df.std(0).std(),
-            'median': df.median(0).median()
-        }
-
-
 class Grid4DMediator(Mediator):
     '''
     Mediator that understands spatial data on a structured, longitude-latitude
@@ -176,6 +93,16 @@ class Grid4DMediator(Mediator):
     time steps (frames). Geometry expected as grid centroids (e.g. centroids
     of 1-degree grid cells).
     '''
+
+    def copy_grid_geometry(self, reference_name):
+        coords = self.client[self.db_name]['coord_index'].find({
+            '_id': reference_name
+        }).next()['i']
+
+        self.client[self.db_name]['coord_index'].insert({
+            '_id': collection_name,
+            'i': coords
+        })
 
     def load(self, collection_name, query):
         # Retrieve a cursor to iterate over the records matching the query
@@ -218,7 +145,7 @@ class Grid4DMediator(Mediator):
         if self.client[self.db_name]['coord_index'].find({
             '_id': collection_name
         }).count() == 0:
-            k = self.client[self.db_name]['coord_index'].insert({
+            self.client[self.db_name]['coord_index'].insert({
                 '_id': collection_name,
                 'i': list(df.index.values)
             })
@@ -268,12 +195,14 @@ class Grid4DMediator(Mediator):
     def summarize(self, collection_name, query={}):
         df = self.load(collection_name, query)
 
-        return { # Axis 0 is the "row-wise" axis
-            'mean': df.mean(0).mean(),
-            'min': df.min(0).min(),
-            'max': df.max(0).max(),
-            'std': df.std(0).std(),
-            'median': df.median(0).median()
+        return {
+            'values': { # Axis 0 is the "row-wise" axis
+                'mean': df.mean(0).mean(),
+                'min': df.min(0).min(),
+                'max': df.max(0).max(),
+                'std': df.std(0).std(),
+                'median': df.median(0).median()
+            }
         }
 
 
@@ -282,8 +211,8 @@ class Grid3DMediator(Mediator):
     Mediator that understands single-valued, spatial data on a structured,
     longitude-latitude grid; two spatial dimensions, one value dimension (3D).
     Geometry expected as grid centroids (e.g. centroids of 1-degree grid cells).
-    Additional fields beyond the "value" field may be included; currently
-    supported is the additional "error" field.
+    Additional fields beyond the "values" field may be included; currently
+    supported is the additional "errors" field.
     '''
     def load(self, collection_name, query={}):
         # Retrieve a cursor to iterate over the records matching the query
@@ -333,7 +262,7 @@ class Grid3DMediator(Mediator):
         # Create the index of grid cell coordinates, if needed
         if self.client[self.db_name]['coord_index'].find({
             '_id': collection_name
-        }) is None:
+        }).count() == 0:
             i = self.client[self.db_name]['coord_index'].insert({
                 '_id': collection_name,
                 'i': [i for i in df.apply(lambda c: [c['x'], c['y']], 1)]
@@ -350,38 +279,21 @@ class Grid3DMediator(Mediator):
             
         j = self.client[self.db_name][collection_name].insert(data_dict)
 
-    def summarize(self,collection_name, query={}):
-#         dfs = self.load_from_db(collection_name, query)
-#         
-#         # Merge them into a single, large data frame
-#         df = pd.concat(dfs)
-#         
-#         summary = {
-#             '_id': collection_name
-#         }
-#         
-#         for param in model.parameters:
-#             # Axis 0 is the "row-wise" axis
-#             summary[param] = {
-#                 'mean': df.mean(0)[param],
-#                 'min': df.min(0)[param],
-#                 'max': df.max(0)[param],
-#                 'std': df.std(0)[param],
-#                 'median': df.median(0)[param]
-#             }
-#         
-#             def summarize(self, collection_name, query={}):
-        df = self.load(collection_name, query)
+    def summarize(self, collection_name, query={}):
+        df = self.load(collection_name, query).values()[0]
 
-        return { # Axis 0 is the "row-wise" axis
-            'mean': df.mean(0).mean(),
-            'min': df.min(0).min(),
-            'max': df.max(0).max(),
-            'std': df.std(0).std(),
-            'median': df.median(0).median()
-        }
+        summary = dict()
+        for param in ('values', 'errors'):
+            if param in df.keys().values:
+                summary[param] = {
+                    'mean': df[param].mean(),
+                    'min': df[param].min(),
+                    'max': df[param].max(),
+                    'std': df[param].std(),
+                    'median': df[param].median()
+                }
 
-        #return summary
+        return summary
         
 
 class Unstructured3DMediator(Mediator):
