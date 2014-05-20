@@ -120,10 +120,10 @@ the data model (TransformationInterface) is compatible.
     "parameters": [String],     // Array of well-known variable names e.g.
                                 // "values", "value", "errors" or "error"
 
-    "span": String,             // The length of time, as a Pandas "freq" code, 
+    "spans": Array,             // The length of time, as Pandas "freq" codes, 
                                 // that an observation spans
 
-    "step": Number,             // The length of time, in seconds, between each
+    "steps": Array,             // The length of time, in seconds, between each
                                 // observation to be imported
 
     "timestamp": String,        // An ISO 8601 timestamp for the first observation
@@ -134,7 +134,6 @@ the data model (TransformationInterface) is compatible.
 
     "var_name": String          // The name of the variable in the hierarchical
                                 // file which stores the data
-
 
 }
 ```
@@ -213,16 +212,10 @@ the data model (TransformationInterface) is compatible.
         }
     },
 
-    "span": Number,             // The length of time, in seconds, that an
-                                // observation spans
-
     "spans": [String],          // Array of lengths of time as Pandas "freq" codes
                                 // that each observation spans; there is more than
                                 // one in this list of the span changes at a
                                 // corresponding data in the "dates" Array
-
-    "step": Number,             // The length of time, in seconds, between each
-                                // observation to be imported
 
     "steps": [Number],          // Array of lengths of time in seconds
                                 // between each observation

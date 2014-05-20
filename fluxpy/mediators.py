@@ -283,7 +283,7 @@ class Grid3DMediator(Mediator):
         # Create the data document itself
         data_dict = {
             '_id': self.parse_timestamp(instance.timestamp),
-            '_span': int(instance.span) or None
+            '_span': instance.spans or None #TODO Find the right span for this time frame
         }
         
         for param in instance.parameters:

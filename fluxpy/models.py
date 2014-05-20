@@ -86,6 +86,21 @@ class TransformationInterface(object):
         for config in self.config.keys():
             setattr(self, config, self.config.get(config))
 
+    def __date_series__(self, df=None, steps=None):
+        if df is not None:
+            steps = df.shape[1]
+
+        dates = pd.date_range(self.timestamp, periods=steps,
+            freq='%dS' % self.steps[0])
+        if len(self.steps) > 1:
+            i = 1
+            while i < len(self.steps):
+                dates = pd.concat(dates, pd.date_range(self.timestamp,
+                    periods=steps, freq='%dS' % self.steps[i]))
+                i += 1
+
+        return dates
+
     def __open__(self, path, var_name=None):
         try:
             self.file = self.file_handler(path) # HDF5/Matlab file interface
@@ -101,6 +116,9 @@ class TransformationInterface(object):
             ][0]
 
     def describe(self, df=None, **kwargs):
+        if getattr(self, '__metadata__', None) is None:
+            self.__metadata__ = dict()
+
         self.__metadata__.update({
             'gridres': getattr(self, 'gridres', {}),
             'title': getattr(self, 'title', ''),
@@ -205,10 +223,7 @@ class SpatioTemporalMatrix(TransformationInterface):
             df = self.extract(**kwargs)
 
         bounds = MultiPoint(list(df.index.values)).bounds
-
-        #TODO Iterate through steps and concatenate the dates series
-        dates = pd.date_range(self.timestamp, periods=df.shape[1],
-            freq='%dS' % self.steps[0])
+        dates = self.__date_series__(df)
 
         self.__metadata__ = {
             'dates': map(lambda t: t.strftime('%Y-%m-%dT%H:%M:%S%z'),
@@ -234,9 +249,9 @@ class SpatioTemporalMatrix(TransformationInterface):
         steps = self.file.get(self.var_name).shape[1] - len(self.columns)
         cols = list(self.columns)
 
-        #TODO Iterate through steps and concatenate the dates series
-        cols.extend(pd.date_range(self.timestamp, periods=steps,
-            freq='%dS' % self.steps[0]))
+        # Iterate through steps and concatenate the dates series; use as the
+        #   column headers
+        cols.extend(self.__date_series__(None, steps))
 
         # Alternatively; for column names as strings:
         # dt = datetime.datetime.strptime(self.timestamp, '%Y-%m-%dT%H:%M:%S')
@@ -359,7 +374,7 @@ class KrigedXCO2Matrix(TransformationInterface):
         }
         self.header = ['lat', 'lng', 'xco2_ppm', 'error_ppm^2', '', '', '', '', '']
         self.parameters = ['values', 'errors']
-        self.span = 518400 # 6 days in seconds
+        self.spans = [518400] # 6 days in seconds
         self.transforms = {
             'errors': lambda x: math.sqrt(x)
         }

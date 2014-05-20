@@ -47,8 +47,7 @@ class TestSpatioTemporalMatrixes(unittest.TestCase):
             timestamp='2004-06-30T00:00:00', var_name='test', span=10800)
 
         self.assertEqual(flux.var_name, 'test')
-        self.assertEqual(flux.step, 10800)
-        self.assertEqual(flux.span, 10800)
+        self.assertEqual(flux.steps, [10800])
         self.assertEqual(flux.timestamp, '2004-06-30T00:00:00')
 
     def test_model_var_name_inference(self):
@@ -68,7 +67,6 @@ class TestSpatioTemporalMatrixes(unittest.TestCase):
         self.assertEqual(df['dates'], ['2004-06-30T00:00:00', '2004-06-30T21:00:00'])
         self.assertEqual(df['gridded'], True)
         self.assertEqual(df['gridres'], {'units': 'degrees', 'x': 1.0, 'y': 1.0})
-        self.assertEqual(df['spans'], [10800])
         self.assertEqual(df['steps'], [10800])
     
     def test_model_extract(self):
@@ -146,8 +144,7 @@ class TestXCO2Data(unittest.TestCase):
             timestamp='2009-06-15')
 
         self.assertEqual(xco2.var_name, 'XCO2')
-        self.assertEqual(xco2.step, 86400)
-        self.assertEqual(xco2.span, None)
+        self.assertEqual(xco2.steps, [86400])
         self.assertEqual(xco2.timestamp, '2009-06-15')
         
     def test_model_extract(self):
@@ -212,8 +209,7 @@ class TestKrigedXCO2Data(unittest.TestCase):
             timestamp='2009-06-15')
 
         self.assertEqual(xco2.var_name, 'krigedData')
-        self.assertEqual(xco2.step, None)
-        self.assertEqual(xco2.span, 518400)
+        self.assertEqual(xco2.spans, [518400])
         self.assertEqual(xco2.timestamp, '2009-06-15')
         
     def test_model_extract(self):
