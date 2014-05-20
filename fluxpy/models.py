@@ -100,6 +100,27 @@ class TransformationInterface(object):
                 k for k in self.file.keys() if self.var_regex.match(k) is not None
             ][0]
 
+    def describe(self, df=None, **kwargs):
+        self.__metadata__.update({
+            'gridres': getattr(self, 'gridres', {}),
+            'title': getattr(self, 'title', ''),
+            'units': getattr(self, 'units', [])
+        })
+
+        if getattr(self, 'global_precision', None) is not None:
+            self.__metadata__['global_precision'] = self.global_precision
+
+        if getattr(self, 'global_units', None) is not None:
+            self.__metadata__['global_units'] = self.global_units
+
+        if getattr(self, 'spans', None) is not None:
+            self.__metadata__['spans'] = self.spans
+
+        if getattr(self, 'steps', None) is not None:
+            self.__metadata__['steps'] = self.steps
+
+        return self.__metadata__
+
     def dump(self, data):
         pass
 
@@ -113,7 +134,7 @@ class CovarianceMatrix(TransformationInterface):
     aggregation (though this can be specified otherwise).
     '''
     def __init__(self, path, *args, **kwargs):
-        self.precision = 5 #TODO Add to schema
+        self.global_precision = 5 
         self.gridres = {
             'units': 'degrees',
             'x': 1.0,
@@ -131,14 +152,9 @@ class CovarianceMatrix(TransformationInterface):
         self.__metadata__ = {
             'dates': [self.timestamp],
             'gridded': True,
-            'gridres': self.gridres
         }
 
-        if getattr(self, 'span', None) is not None:
-            self.__metadata__['spans'] = [self.span]
-
-        if getattr(self, 'step', None) is not None:
-            self.__metadata__['steps'] = [self.step]
+        super(CovarianceMatrix, self).describe(df, **kwargs)
 
         return self.__metadata__
 
@@ -153,8 +169,8 @@ class CovarianceMatrix(TransformationInterface):
         df = pd.DataFrame(self.file.get(self.var_name)[:])
         assert df.shape[0] == df.shape[1], 'Expected a square matrix (covariance matrix)'
 
-        if self.precision is not None:
-            df = df.apply(lambda col: col.map(lambda x: float(('%%.%df' % self.precision) % x)))
+        if self.global_precision is not None:
+            df = df.apply(lambda col: col.map(lambda x: float(('%%.%df' % self.global_precision) % x)))
 
         return df
 
@@ -165,7 +181,7 @@ class SpatioTemporalMatrix(TransformationInterface):
     an arbitrary number of columns following each representing one step in time.
     '''
     def __init__(self, path, config_file=None, *args, **kwargs):
-        self.precision = 5 #TODO Add to schema
+        self.global_precision = 5 
         self.columns = ['x', 'y']
         self.formats = {
             'x': '%.5f',
@@ -177,12 +193,9 @@ class SpatioTemporalMatrix(TransformationInterface):
             'y': 1.0, # Grid cell resolution in the y direction
         }
         self.header = ['lng', 'lat']
-        self.step = 10800 # 3 hours in seconds
-        self.parameters = ['value', 'error']
+        self.steps = [10800] # 3 hours in seconds
+        self.parameters = ['values']
         self.units = ['degrees', 'degrees']
-        self.span = None
-        self.timestamp = None
-        self.title = 'Surface Carbon Flux'
         self.transforms = {}
 
         super(SpatioTemporalMatrix, self).__init__(path, config_file, *args, **kwargs)
@@ -192,24 +205,20 @@ class SpatioTemporalMatrix(TransformationInterface):
             df = self.extract(**kwargs)
 
         bounds = MultiPoint(list(df.index.values)).bounds
+
+        #TODO Iterate through steps and concatenate the dates series
         dates = pd.date_range(self.timestamp, periods=df.shape[1],
-            freq='%dS' % self.step)
+            freq='%dS' % self.steps[0])
 
         self.__metadata__ = {
             'dates': map(lambda t: t.strftime('%Y-%m-%dT%H:%M:%S%z'),
                 [dates[0], dates[-1]]),
             'gridded': True,
             'bbox': bounds,
-            'bboxmd5': md5(str(bounds)).hexdigest(),
-            'gridres': self.gridres,
-            'units': self.units
+            'bboxmd5': md5(str(bounds)).hexdigest()
         }
 
-        if getattr(self, 'span', None) is not None:
-            self.__metadata__['spans'] = [self.span]
-
-        if getattr(self, 'step', None) is not None:
-            self.__metadata__['steps'] = [self.step]
+        super(SpatioTemporalMatrix, self).describe(df, **kwargs)
 
         return self.__metadata__
 
@@ -224,8 +233,10 @@ class SpatioTemporalMatrix(TransformationInterface):
         # Create the column headers as a time series
         steps = self.file.get(self.var_name).shape[1] - len(self.columns)
         cols = list(self.columns)
+
+        #TODO Iterate through steps and concatenate the dates series
         cols.extend(pd.date_range(self.timestamp, periods=steps,
-            freq='%dS' % self.step))
+            freq='%dS' % self.steps[0]))
 
         # Alternatively; for column names as strings:
         # dt = datetime.datetime.strptime(self.timestamp, '%Y-%m-%dT%H:%M:%S')
@@ -281,11 +292,10 @@ class XCO2Matrix(TransformationInterface):
             'type': 'Point'
         }
         self.header = ['lng', 'lat', 'xco2_ppm', 'day', 'year', 'error_ppm']
-        self.step = 86400 # 1 day (daily) in seconds
+        self.steps = [86400] # 1 day (daily) in seconds
         self.parameters = ['value', 'error']
         self.units = ['degrees', 'degrees', 'ppm', None, None, 'ppm^2']
         self.var_name = 'XCO2'
-        self.span = None
 
         super(XCO2Matrix, self).__init__(path, *args, **kwargs)
 
@@ -348,7 +358,6 @@ class KrigedXCO2Matrix(TransformationInterface):
             'units': 'degrees'
         }
         self.header = ['lat', 'lng', 'xco2_ppm', 'error_ppm^2', '', '', '', '', '']
-        self.step = None
         self.parameters = ['values', 'errors']
         self.span = 518400 # 6 days in seconds
         self.transforms = {

@@ -8,7 +8,6 @@ xco2 = KrigedXCO2Matrix('xco2_data.mat', timestamp='2009-06-15')
 mediator.add(xco2).save_to_db('my_xco2_data')
 '''
 
-import ipdb#FIXME
 import datetime
 import os
 import re
@@ -71,6 +70,44 @@ class Mediator(object):
                 })
 
         return update_selection
+
+    def generate_metadata(self, collection_name, instance, force=False):
+        '''
+        Creates an entry in the metadata collection for this instance of data;
+        updates the summary statistics of that entry if it already exists.
+        '''
+        # Get the metadata
+        metadata = instance.describe()
+
+        # Set the unique identifier; include the summary statistics
+        metadata['_id'] = collection_name
+        metadata['stats'] = self.summarize(collection_name)
+
+        # Find or create metadata; if it already exists, update it based on the
+        #   the new values in the time series being considered
+        query = self.client[self.db_name]['metadata'].find({
+            '_id': collection_name
+        })
+        if query.count() == 0:
+            self.client[self.db_name]['metadata'].insert(metadata)
+
+        elif force:
+            self.client[self.db_name]['metadata'].remove({'_id': collection_name})
+            self.client[self.db_name]['metadata'].insert(metadata)
+
+        else:
+            update_selection = self.__get_updates__(query, metadata)
+
+            # If anything's changed, update the database!
+            if len(update_selection.items()) != 0:
+                # Update the metadata
+                self.client[self.db_name]['metadata'].update({
+                    '_id': collection_name
+                }, {
+                    '$set': update_selection
+                })
+
+        return metadata
 
     def parse_timestamp(self, timestamp):
         '''Parses an ISO 8601 timestamp'''
@@ -152,10 +189,10 @@ class Grid4DMediator(Mediator):
 
         # Iterate over the transpose of the data frame
         for timestamp, series in df.T.iterrows():
-            if getattr(instance, 'precision', None) is not None:
+            if getattr(instance, 'global_precision', None) is not None:
                 self.client[self.db_name][collection_name].insert({
                     '_id': timestamp,
-                    'values': map(lambda x: round(x[1], instance.precision),
+                    'values': map(lambda x: round(x[1], instance.global_precision),
                         series.iterkv())
                 })
 
@@ -165,32 +202,7 @@ class Grid4DMediator(Mediator):
                     'values': series.tolist()
                 })
 
-        # Get the metadata; assume they are all the same
-        metadata = instance.describe(df)
-
-        # Set the unique identifier; include the summary statistics
-        metadata['_id'] = collection_name
-        metadata['stats'] = self.summarize(collection_name)
-
-        # Find or create metadata; if it already exists, update it based on the
-        #   the new values in the time series being considered
-        query = self.client[self.db_name]['metadata'].find({
-            '_id': collection_name
-        })
-        if query.count() == 0:
-            self.client[self.db_name]['metadata'].insert(metadata)
-
-        else:
-            update_selection = self.__get_updates__(query, metadata)
-
-            # If anything's changed, update the database!
-            if len(update_selection.items()) != 0:
-                # Update the metadata
-                self.client[self.db_name]['metadata'].update({
-                    '_id': collection_name
-                }, {
-                    '$set': update_selection
-                })
+        self.generate_metadata(collection_name, instance)
 
     def summarize(self, collection_name, query={}):
         df = self.load(collection_name, query)
@@ -275,9 +287,15 @@ class Grid3DMediator(Mediator):
         }
         
         for param in instance.parameters:
-            data_dict[param] = df[param].tolist()
-            
-        j = self.client[self.db_name][collection_name].insert(data_dict)
+            if getattr(instance, 'global_precision', None) is not None:
+                data_dict[param] = map(lambda x: round(x[1], instance.global_precision),
+                    df[param].iterkv())#TODO Untested
+
+            else:
+                data_dict[param] = df[param].tolist()
+
+        self.client[self.db_name][collection_name].insert(data_dict)
+        self.generate_metadata(collection_name, instance)#TODO Untested
 
     def summarize(self, collection_name, query={}):
         df = self.load(collection_name, query).values()[0]

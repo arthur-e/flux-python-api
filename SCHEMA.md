@@ -15,6 +15,16 @@ Last updated: April 25, 2014.
                                 // and any time the interval or range changes
                                 // between the start and end
 
+    "global_precision": Number, // Used with univariate (single-valued) input
+                                //  i.e. only one variable in input data;
+                                //  the decimal precision to apply to the "values"
+                                //  and "errors" parameters, if not specified
+                                //  elsewhere
+
+    "global_units": String,     // Used with univariate (single-valued) input
+                                //  i.e. only one variable in input data;
+                                //  the name of the measurement units used
+
     "gridded": Boolean,         // Indicates the data are on a grid
 
     "gridres": {                // Grid resolution, if data are gridded
@@ -73,6 +83,11 @@ the data model (TransformationInterface) is compatible.
     "columns": [String],        // Array of well-known column identifiers, in order
                                 // e.g. "x", "y", "value", "error"
 
+    "formats": Object,          // An associative array (mapping) of parameter
+                                //  names to the string formatting (or
+                                //  decimal-precision formatting) for the
+                                //  corresponding parameter's value
+
     "geometry": {               // Implies data are not on a structured grid
 
         // Specifies that each document is a FeatureCollection and stored as
@@ -83,7 +98,17 @@ the data model (TransformationInterface) is compatible.
         "type": ("Point"|"LineString"|"Polygon")
 
     },
-    
+
+    "global_precision": Number, // Used with univariate (single-valued) input
+                                //  i.e. only one variable in input data;
+                                //  the decimal precision to apply to the "values"
+                                //  and "errors" parameters, if not specified
+                                //  elsewhere
+
+    "global_units": String,     // Used with univariate (single-valued) input
+                                //  i.e. only one variable in input data;
+                                //  the name of the measurement units used
+
     "gridres": {
     	"units": String			// Grid cell units 
     	"x": Number				// Grid cell resolution in the x direction
@@ -128,6 +153,11 @@ the data model (TransformationInterface) is compatible.
                                 // and any time the interval or range changes
                                 // between the start and end
 
+    "formats": Object,          // An associative array (mapping) of parameter
+                                //  names to the string formatting (or
+                                //  decimal-precision formatting) for the
+                                //  corresponding parameter's value
+
     "geometry": {               // Implies data are not on a structured grid
 
         // Specifies that each document is a FeatureCollection and stored as
@@ -138,6 +168,16 @@ the data model (TransformationInterface) is compatible.
         "type": ("Point"|"LineString"|"Polygon")
 
     },
+
+    "global_precision": Number, // Used with univariate (single-valued) input
+                                //  i.e. only one variable in input data;
+                                //  the decimal precision to apply to the "values"
+                                //  and "errors" parameters, if not specified
+                                //  elsewhere
+
+    "global_units": String,     // Used with univariate (single-valued) input
+                                //  i.e. only one variable in input data;
+                                //  the name of the measurement units used
 
     "gridded": Boolean,         // Indicates the data are on a grid
 
