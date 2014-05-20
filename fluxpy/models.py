@@ -21,7 +21,7 @@ Example JSON configuration file for a model:
         "y": 0.5, # Grid cell resolution in the y direction
     },
     "timestamp": null, # The ISO 8601 timestamp
-    "units": [], # The units of measurement, in order
+    "units": {}, # The units of measurement for each parameter
     "var_name": null, # The Matlab/HDF5 variable of interest
 }
 '''
@@ -122,14 +122,8 @@ class TransformationInterface(object):
         self.__metadata__.update({
             'gridres': getattr(self, 'gridres', {}),
             'title': getattr(self, 'title', ''),
-            'units': getattr(self, 'units', [])
+            'units': getattr(self, 'units', {})
         })
-
-        if getattr(self, 'global_precision', None) is not None:
-            self.__metadata__['global_precision'] = self.global_precision
-
-        if getattr(self, 'global_units', None) is not None:
-            self.__metadata__['global_units'] = self.global_units
 
         if getattr(self, 'spans', None) is not None:
             self.__metadata__['spans'] = self.spans
@@ -152,14 +146,17 @@ class CovarianceMatrix(TransformationInterface):
     aggregation (though this can be specified otherwise).
     '''
     def __init__(self, path, *args, **kwargs):
-        self.global_precision = 5 
+        self.precision = 5 
         self.gridres = {
             'units': 'degrees',
             'x': 1.0,
             'y': 1.0,
         }
         self.parameters = ['value', 'error']
-        self.units = ['degrees', 'degrees']
+        self.units = {
+            'x': 'degrees',
+            'y': 'degrees'
+        }
 
         super(CovarianceMatrix, self).__init__(path, *args, **kwargs)
 
@@ -187,8 +184,8 @@ class CovarianceMatrix(TransformationInterface):
         df = pd.DataFrame(self.file.get(self.var_name)[:])
         assert df.shape[0] == df.shape[1], 'Expected a square matrix (covariance matrix)'
 
-        if self.global_precision is not None:
-            df = df.apply(lambda col: col.map(lambda x: float(('%%.%df' % self.global_precision) % x)))
+        if self.precision is not None:
+            df = df.apply(lambda col: col.map(lambda x: float(('%%.%df' % self.precision) % x)))
 
         return df
 
@@ -199,7 +196,7 @@ class SpatioTemporalMatrix(TransformationInterface):
     an arbitrary number of columns following each representing one step in time.
     '''
     def __init__(self, path, config_file=None, *args, **kwargs):
-        self.global_precision = 5 
+        self.precision = 5 
         self.columns = ['x', 'y']
         self.formats = {
             'x': '%.5f',
@@ -213,7 +210,10 @@ class SpatioTemporalMatrix(TransformationInterface):
         self.header = ['lng', 'lat']
         self.steps = [10800] # 3 hours in seconds
         self.parameters = ['values']
-        self.units = ['degrees', 'degrees']
+        self.units = {
+            'x': 'degrees',
+            'y': 'degrees'
+        }
         self.transforms = {}
 
         super(SpatioTemporalMatrix, self).__init__(path, config_file, *args, **kwargs)
@@ -309,7 +309,12 @@ class XCO2Matrix(TransformationInterface):
         self.header = ['lng', 'lat', 'xco2_ppm', 'day', 'year', 'error_ppm']
         self.steps = [86400] # 1 day (daily) in seconds
         self.parameters = ['value', 'error']
-        self.units = ['degrees', 'degrees', 'ppm', None, None, 'ppm^2']
+        self.units = {
+            'x': 'degrees',
+            'y': 'degrees',
+            'value': 'ppm',
+            'error': 'ppm&sup2;'
+        }
         self.var_name = 'XCO2'
 
         super(XCO2Matrix, self).__init__(path, *args, **kwargs)
@@ -378,7 +383,12 @@ class KrigedXCO2Matrix(TransformationInterface):
         self.transforms = {
             'errors': lambda x: math.sqrt(x)
         }
-        self.units = ['degrees', 'degrees', 'ppm', 'ppm', None, None, None, None, None]
+        self.units = {
+            'x': 'degrees',
+            'y': 'degrees',
+            'value': 'ppm',
+            'error': 'ppm'
+        }
         self.var_name = 'krigedData'
 
         super(KrigedXCO2Matrix, self).__init__(path, *args, **kwargs)

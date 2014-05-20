@@ -189,10 +189,10 @@ class Grid4DMediator(Mediator):
 
         # Iterate over the transpose of the data frame
         for timestamp, series in df.T.iterrows():
-            if getattr(instance, 'global_precision', None) is not None:
+            if getattr(instance, 'precision', None) is not None:
                 self.client[self.db_name][collection_name].insert({
                     '_id': timestamp,
-                    'values': map(lambda x: round(x[1], instance.global_precision),
+                    'values': map(lambda x: round(x[1], instance.precision),
                         series.iterkv())
                 })
 
@@ -287,8 +287,8 @@ class Grid3DMediator(Mediator):
         }
         
         for param in instance.parameters:
-            if getattr(instance, 'global_precision', None) is not None:
-                data_dict[param] = map(lambda x: round(x[1], instance.global_precision),
+            if getattr(instance, 'precision', None) is not None:
+                data_dict[param] = map(lambda x: round(x[1], instance.precision),
                     df[param].iterkv())#TODO Untested
 
             else:

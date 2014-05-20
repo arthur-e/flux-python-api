@@ -15,16 +15,6 @@ Last updated: April 25, 2014.
                                 // and any time the interval or range changes
                                 // between the start and end
 
-    "global_precision": Number, // Used with univariate (single-valued) input
-                                //  i.e. only one variable in input data;
-                                //  the decimal precision to apply to the "values"
-                                //  and "errors" parameters, if not specified
-                                //  elsewhere
-
-    "global_units": String,     // Used with univariate (single-valued) input
-                                //  i.e. only one variable in input data;
-                                //  the name of the measurement units used
-
     "gridded": Boolean,         // Indicates the data are on a grid
 
     "gridres": {                // Grid resolution, if data are gridded
@@ -40,6 +30,12 @@ Last updated: April 25, 2014.
     "bboxmd5": String,          // MD5 Hash
 
     "bbox": [Number() minx, miny, maxx, maxy],
+
+    "precision": Number,        // Used with univariate (single-valued) input
+                                //  i.e. only one variable in input data;
+                                //  the decimal precision to apply to the "values"
+                                //  and "errors" parameters, if not specified
+                                //  elsewhere
 
     "stats": {                  // Summary statistics for the population
         "values": {             //  of each parameter; must include the "values"
@@ -68,7 +64,10 @@ Last updated: April 25, 2014.
 
         "uri": String           // Or they are available at this URI
 
-    }
+    },
+
+    "units": Object            // The measurement units, per parameter
+
 }
 ```
 
@@ -99,16 +98,6 @@ the data model (TransformationInterface) is compatible.
 
     },
 
-    "global_precision": Number, // Used with univariate (single-valued) input
-                                //  i.e. only one variable in input data;
-                                //  the decimal precision to apply to the "values"
-                                //  and "errors" parameters, if not specified
-                                //  elsewhere
-
-    "global_units": String,     // Used with univariate (single-valued) input
-                                //  i.e. only one variable in input data;
-                                //  the name of the measurement units used
-
     "gridres": {
     	"units": String			// Grid cell units 
     	"x": Number				// Grid cell resolution in the x direction
@@ -120,6 +109,12 @@ the data model (TransformationInterface) is compatible.
     "parameters": [String],     // Array of well-known variable names e.g.
                                 // "values", "value", "errors" or "error"
 
+    "precision": Number,        // Used with univariate (single-valued) input
+                                //  i.e. only one variable in input data;
+                                //  the decimal precision to apply to the "values"
+                                //  and "errors" parameters, if not specified
+                                //  elsewhere
+
     "spans": Array,             // The length of time, as Pandas "freq" codes, 
                                 // that an observation spans
 
@@ -130,7 +125,7 @@ the data model (TransformationInterface) is compatible.
 
     "title": String,			// Human-readable "pretty" name for the data set 
     
-    "units": [String],          // Array of units for each field, in order
+    "units": Object,            // The measurement units, per parameter
 
     "var_name": String          // The name of the variable in the hierarchical
                                 // file which stores the data
@@ -168,16 +163,6 @@ the data model (TransformationInterface) is compatible.
 
     },
 
-    "global_precision": Number, // Used with univariate (single-valued) input
-                                //  i.e. only one variable in input data;
-                                //  the decimal precision to apply to the "values"
-                                //  and "errors" parameters, if not specified
-                                //  elsewhere
-
-    "global_units": String,     // Used with univariate (single-valued) input
-                                //  i.e. only one variable in input data;
-                                //  the name of the measurement units used
-
     "gridded": Boolean,         // Indicates the data are on a grid
 
     "gridres": {                // Grid resolution, if data are gridded
@@ -198,6 +183,12 @@ the data model (TransformationInterface) is compatible.
 
     "parameters": [String],     // Array of well-known variable names e.g.
                                 // "values", "value", "errors" or "error"
+
+    "precision": Number,        // Used with univariate (single-valued) input
+                                //  i.e. only one variable in input data;
+                                //  the decimal precision to apply to the "values"
+                                //  and "errors" parameters, if not specified
+                                //  elsewhere
 
     "stats": {                  // Summary statistics for the population
         "values": {             //  of each parameter; must include the "values"
@@ -232,7 +223,7 @@ the data model (TransformationInterface) is compatible.
 
     },
 
-    "units": [String],          // Array of units for each field, in order
+    "units": Object,            // The measurement units, per parameter
 
     "var_name": String          // The name of the variable in the hierarchical
                                 // file which stores the data
