@@ -26,6 +26,7 @@ Example JSON configuration file for a model:
 }
 '''
 
+import ipdb#FIXME
 import datetime
 import json
 import math
@@ -37,6 +38,7 @@ import numpy as np
 import scipy.io
 import h5py
 from dateutil.relativedelta import *
+from fluxpy import ISO_8601
 from shapely.geometry import MultiPoint
 
 try:
@@ -73,6 +75,16 @@ class TransformationInterface(object):
         config = config_file if config_file else '.'.join(path.split('.')[:-1]) + '.json'
         if os.path.exists(config):
             self.config = json.load(open(config, 'rb'))
+
+        # If the filename can be parsed for information, mine the timestamp from it
+        if getattr(self, 'regex', None) is not None:
+            if self.regex.has_key('map'):
+                if self.regex['map'].has_key('timestamp') and getattr(self, 'timestamp', None) is None:
+                    match = re.compile(self.regex['regex']).match(os.path.basename(path))
+                    if match is not None:
+                        fmt = self.regex['map']['timestamp']
+                        t = match.groupdict()['timestamp']
+                        self.timestamp = datetime.datetime.strptime(t, fmt).strftime(ISO_8601)
 
         # Update and apply the configuration options as attributes
         self.__configure__(**kwargs)
@@ -175,11 +187,12 @@ class CovarianceMatrix(TransformationInterface):
 
     def extract(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
-        if self.timestamp is None:
-            raise AttributeError('One or more required configuration parameters were not provided')
 
         # Allow overrides through optional keyword arguments in extract()
         self.__configure__(**kwargs)
+
+        if getattr(self, 'timestamp', None) is None:
+            raise AttributeError('One or more required configuration parameters were not provided')
 
         df = pd.DataFrame(self.file.get(self.var_name)[:])
         assert df.shape[0] == df.shape[1], 'Expected a square matrix (covariance matrix)'
@@ -226,7 +239,7 @@ class SpatioTemporalMatrix(TransformationInterface):
         dates = self.__date_series__(df)
 
         self.__metadata__ = {
-            'dates': map(lambda t: t.strftime('%Y-%m-%dT%H:%M:%S%z'),
+            'dates': map(lambda t: t.strftime(ISO_8601),
                 [dates[0], dates[-1]]),
             'gridded': True,
             'bbox': bounds,
@@ -239,11 +252,12 @@ class SpatioTemporalMatrix(TransformationInterface):
 
     def extract(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
-        if self.timestamp is None:
-            raise AttributeError('One or more required configuration parameters were not provided')
 
         # Allow overrides through optional keyword arguments in extract()
         self.__configure__(**kwargs)
+
+        if getattr(self, 'timestamp', None) is None:
+            raise AttributeError('One or more required configuration parameters were not provided')
 
         # Create the column headers as a time series
         steps = self.file.get(self.var_name).shape[1] - len(self.columns)
@@ -324,13 +338,14 @@ class XCO2Matrix(TransformationInterface):
 
     def extract(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
-        if self.timestamp is None:
-            raise AttributeError('One or more required configuration parameters were not provided')
 
         # Allow overrides through optional keyword arguments in extract()
         self.__configure__(**kwargs)
+
+        if getattr(self, 'timestamp', None) is None:
+            raise AttributeError('One or more required configuration parameters were not provided')
         
-        if self.var_name is None:
+        if getattr(self, 'var_name', None) is None:
             raise AttributeError('One or more required configuration parameters were not provided')
         
         # Data frame
@@ -373,13 +388,19 @@ class KrigedXCO2Matrix(TransformationInterface):
             'errors': '%.4f'
         }
         self.gridres = {
-            'x': 0.5,
-            'y': 0.5,
+            'x': 1.0,
+            'y': 1.0,
             'units': 'degrees'
         }
         self.header = ['lat', 'lng', 'xco2_ppm', 'error_ppm^2', '', '', '', '', '']
         self.parameters = ['values', 'errors']
         self.spans = [518400] # 6 days in seconds
+        self.regex = {
+            'regex': '^Kriged_(?P<timestamp>\d{4}\d{2}\d{2})_.*$',
+            'map': {
+                'timestamp': '%Y%m%d'
+            }
+        }
         self.transforms = {
             'errors': lambda x: math.sqrt(x)
         }
@@ -392,14 +413,32 @@ class KrigedXCO2Matrix(TransformationInterface):
         self.var_name = 'krigedData'
 
         super(KrigedXCO2Matrix, self).__init__(path, *args, **kwargs)
+
+    def describe(self, df=None, **kwargs):
+        if df is None:
+            df = self.extract(**kwargs)
+
+        bounds = MultiPoint([i for i in df.apply(lambda c: [c['x'], c['y']], 1)]).bounds
+
+        self.__metadata__ = {
+            'dates': [self.timestamp],
+            'gridded': True,
+            'bbox': bounds,
+            'bboxmd5': md5(str(bounds)).hexdigest()
+        }
+
+        super(KrigedXCO2Matrix, self).describe(df, **kwargs)
+
+        return self.__metadata__
     
     def extract(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
-        if self.timestamp is None:
-            raise AttributeError('One or more required configuration parameters were not provided')
 
         # Allow overrides through optional keyword arguments in extract()
         self.__configure__(**kwargs)
+
+        if getattr(self, 'timestamp', None) is None:
+            raise AttributeError('One or more required configuration parameters were not provided')
 
         if not all((self.var_name, self.timestamp)):
             raise AttributeError('One or more required configuration parameters were not provided')

@@ -27,6 +27,7 @@ sys.path[:0] = new_sys_path
 
 DB = 'fluxvis'
 DEFAULT_PATH = '/ws4/idata/fluxvis/casa_gfed_inversion_results/'
+ISO_8601 = '%Y-%m-%dT%H:%M:%S%z'
 RESERVED_COLLECTION_NAMES = (
     'coord_index',
     'metadata',

@@ -40,17 +40,17 @@ class Mediator(object):
         last_metadata = query.next()
         update_selection = {}
 
-        # Check if the last date and the first new data are the same...
-        if last_metadata['dates'][-1] != metadata['dates'][0]:
-            new_dates = list(last_metadata['dates'])
-            new_dates.extend(metadata['dates'])
-
-            update_selection.update({
-                'dates': new_dates
-            })
-
         # Check if the last step and the first new step are the same...
         if last_metadata.has_key('steps'):
+            # Check if the last date and the first new data are the same...
+            if last_metadata['dates'][-1] != metadata['dates'][0]:
+                new_dates = list(last_metadata['dates'])
+                new_dates.extend(metadata['dates'])
+
+                update_selection.update({
+                    'dates': new_dates
+                })
+
             if last_metadata.get('steps')[-1] != metadata.get('steps')[0]:
                 new_steps = list(last_metadata.get('steps'))
                 new_steps.extend(metadata.get('steps'))
@@ -61,6 +61,22 @@ class Mediator(object):
 
         # Check if the last span and the first new span are the same...
         if last_metadata.has_key('spans'):
+            if last_metadata.has_key('dates'):
+                dates_update = list(last_metadata['dates'])
+                last_date = datetime.datetime.strptime(last_metadata['dates'][-1],
+                    ISO_8601)
+
+                # Check if the last date and the new data are the same...
+                for new_date in metadata['dates']:
+                    if (last_date + datetime.timedelta(days=metadata['spans'][0])) != new_date:
+                        dates_update.append(new_date)
+
+                    last_date = new_date
+
+                update_selection.update({
+                    'dates': dates_update
+                })
+
             if last_metadata.get('spans')[-1] != metadata.get('spans')[0]:
                 new_spans = list(last_metadata.get('spans'))
                 new_spans.extend(metadata.get('spans'))
