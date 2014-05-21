@@ -26,7 +26,6 @@ Example JSON configuration file for a model:
 }
 '''
 
-import ipdb#FIXME
 import datetime
 import json
 import math
@@ -443,9 +442,12 @@ class KrigedXCO2Matrix(TransformationInterface):
         if not all((self.var_name, self.timestamp)):
             raise AttributeError('One or more required configuration parameters were not provided')
 
+        file_data = self.file.get(self.var_name)[:]
+        assert file_data.shape[1] == len(self.columns), 'Mismatched number of columns and number of fields in the data'
+
         # Data frame
         try:
-            df = pd.DataFrame(self.file.get(self.var_name)[:], columns=self.columns)
+            df = pd.DataFrame(file_data, columns=self.columns)
 
         except TypeError:
             raise ValueError('Could not get at the variable named "%s"' % self.var_name)

@@ -8,7 +8,6 @@ xco2 = KrigedXCO2Matrix('xco2_data.mat', timestamp='2009-06-15')
 mediator.add(xco2).save_to_db('my_xco2_data')
 '''
 
-import ipdb#FIXME
 import datetime
 import os
 import re
@@ -42,57 +41,60 @@ class Mediator(object):
         last_metadata = query.next()
         update_selection = {}
 
+        if last_metadata.has_key('dates'):
+            if last_metadata.has_key('steps'):
+                key = 'steps'
+
+            elif last_metadata.has_key('spans'):
+                key = 'spans'
+
+            last_dates = last_metadata.get('dates')
+            dates_update = list(last_metadata.get('dates'))
+            steps_update = list(last_metadata.get(key))
+
+            for datestr, step_or_span in zip(metadata.get('dates'), metadata.get(key)):
+                date = parser.parse(datestr)
+
+                i = 0
+                while i < len(last_dates):
+                    dt = datetime.timedelta(seconds=step_or_span)
+                    last_date = parser.parse(last_dates[i])
+                    very_last_date = parser.parse(last_dates[-1])
+
+                    # If this date is 1 step or span away from the last...
+                    if (date + dt) == last_date or (date + dt) == very_last_date:
+                        break
+
+                    # Is it before the most recent date?
+                    if date < last_date:
+
+                        # Insert older timestamp, step/span e.g. [old, *new, old, old]
+                        dates_update.insert(i, datestr)
+                        steps_update.insert(i, step_or_span)
+                        break
+
+                    # Is it being compared to the last date and still more recent?
+                    elif (i + 1) == len(last_dates) and date > very_last_date:
+
+                        if date != very_last_date:
+                            # Add new timestamp, step/span e.g.: [old, old, *new]
+                            dates_update.append(datestr)
+                            steps_update.append(step_or_span)
+                            break
+
+                    i += 1
+
         if last_metadata.has_key('steps'):
-            if last_metadata.has_key('dates'):
-                last_dates = last_metadata.get('dates')
-                dates_update = list(last_metadata.get('dates'))
-                steps_update = list(last_metadata.get('steps'))
+            update_selection.update({
+                'dates': dates_update,
+                'steps': steps_update
+            })
 
-                for date, step in zip(metadata.get('dates'), metadata.get('steps')):
-                    i = 0
-                    while i < len(last_dates):
-                        # Insert older timestamp, step e.g. [old, *new, old, old]
-                        if last_dates[i] < date < last_dates[i + 1]:
-                            dates_update.insert(i, date)
-                            steps_update.insert(i, step)
-
-                        # Add new timestamp, step e.g.: [old, old, *new]
-                        elif (i + 1) == len(last_dates) and date > last_dates[-1]:
-                            dates_update.append(date)
-                            steps_update.append(step)
-
-                        i += 1
-
-                update_selection.update({
-                    'dates': dates_update,
-                    'steps': steps_update
-                })
-
-        if last_metadata.has_key('spans'):
-            if last_metadata.has_key('dates'):
-                last_dates = last_metadata.get('dates')
-                dates_update = list(last_metadata.get('dates'))
-                spans_update = list(last_metadata.get('spans'))
-
-                for date, span in zip(metadata.get('dates'), metadata.get('spans')):
-                    i = 0
-                    while i < len(last_dates):
-                        # Insert older timestamp, span e.g. [old, *new, old, old]
-                        if last_dates[i] < date < last_dates[i + 1]:
-                            dates_update.insert(i, date)
-                            spans_update.insert(i, span)
-
-                        # Add new timestamp, span e.g.: [old, old, *new]
-                        elif (i + 1) == len(last_dates) and date > last_dates[-1]:
-                            dates_update.append(date)
-                            spans_update.append(span)
-
-                        i += 1
-
-                update_selection.update({
-                    'dates': dates_update,
-                    'spans': spans_update
-                })
+        elif last_metadata.has_key('spans'):
+            update_selection.update({
+                'dates': dates_update,
+                'spans': steps_update
+            })
 
         return update_selection
 
