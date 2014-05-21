@@ -248,23 +248,24 @@ class TestKrigedXCO2Data(unittest.TestCase):
         # Test the mediator's summarize() method
         summary = self.mediator.summarize('test2')
         self.maxDiff = None # Show the full diff
+
         expected_summary = {
             'errors': {
-                'max': 1.6173,
-                'mean': 0.81096864180154282,
-                'median': 0.8117,
-                'min': 0.20619999999999999,
-                'std': 0.28630911583420193
+                'std': 0.16354196638184409,
+                'max': 1.2717000000000001,
+                'min': 0.4541,
+                'median': 0.9009,
+                'mean': 0.88556415200562733
             },
             'values': {
+                'std': 1.5496076951756685,
                 'max': 391.35000000000002,
-                'mean': 386.29349542575756,
-                'median': 386.37,
                 'min': 381.68000000000001,
-                'std': 1.5496076951756685
+                'median': 386.37,
+                'mean': 386.29349542575756
             }
         }
-        
+
         self.assertEqual(summary, expected_summary)
 
 

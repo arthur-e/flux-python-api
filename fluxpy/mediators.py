@@ -8,14 +8,16 @@ xco2 = KrigedXCO2Matrix('xco2_data.mat', timestamp='2009-06-15')
 mediator.add(xco2).save_to_db('my_xco2_data')
 '''
 
+import ipdb#FIXME
 import datetime
 import os
 import re
 import sys
 import pandas as pd
 import numpy as np
+from dateutil import parser
 from pymongo import MongoClient
-from fluxpy import DB, DEFAULT_PATH, RESERVED_COLLECTION_NAMES
+from fluxpy import DB, DEFAULT_PATH, ISO_8601, RESERVED_COLLECTION_NAMES
 
 try:
     from hashlib import md5
@@ -40,49 +42,56 @@ class Mediator(object):
         last_metadata = query.next()
         update_selection = {}
 
-        # Check if the last step and the first new step are the same...
         if last_metadata.has_key('steps'):
-            # Check if the last date and the first new data are the same...
-            if last_metadata['dates'][-1] != metadata['dates'][0]:
-                new_dates = list(last_metadata['dates'])
-                new_dates.extend(metadata['dates'])
+            if last_metadata.has_key('dates'):
+                last_dates = last_metadata.get('dates')
+                dates_update = list(last_metadata.get('dates'))
+                steps_update = list(last_metadata.get('steps'))
+
+                for date, step in zip(metadata.get('dates'), metadata.get('steps')):
+                    i = 0
+                    while i < len(last_dates):
+                        # Insert older timestamp, step e.g. [old, *new, old, old]
+                        if last_dates[i] < date < last_dates[i + 1]:
+                            dates_update.insert(i, date)
+                            steps_update.insert(i, step)
+
+                        # Add new timestamp, step e.g.: [old, old, *new]
+                        elif (i + 1) == len(last_dates) and date > last_dates[-1]:
+                            dates_update.append(date)
+                            steps_update.append(step)
+
+                        i += 1
 
                 update_selection.update({
-                    'dates': new_dates
+                    'dates': dates_update,
+                    'steps': steps_update
                 })
 
-            if last_metadata.get('steps')[-1] != metadata.get('steps')[0]:
-                new_steps = list(last_metadata.get('steps'))
-                new_steps.extend(metadata.get('steps'))
-
-                update_selection.update({
-                    'steps': new_steps
-                })
-
-        # Check if the last span and the first new span are the same...
         if last_metadata.has_key('spans'):
             if last_metadata.has_key('dates'):
-                dates_update = list(last_metadata['dates'])
-                last_date = datetime.datetime.strptime(last_metadata['dates'][-1],
-                    ISO_8601)
+                last_dates = last_metadata.get('dates')
+                dates_update = list(last_metadata.get('dates'))
+                spans_update = list(last_metadata.get('spans'))
 
-                # Check if the last date and the new data are the same...
-                for new_date in metadata['dates']:
-                    if (last_date + datetime.timedelta(days=metadata['spans'][0])) != new_date:
-                        dates_update.append(new_date)
+                for date, span in zip(metadata.get('dates'), metadata.get('spans')):
+                    i = 0
+                    while i < len(last_dates):
+                        # Insert older timestamp, span e.g. [old, *new, old, old]
+                        if last_dates[i] < date < last_dates[i + 1]:
+                            dates_update.insert(i, date)
+                            spans_update.insert(i, span)
 
-                    last_date = new_date
+                        # Add new timestamp, span e.g.: [old, old, *new]
+                        elif (i + 1) == len(last_dates) and date > last_dates[-1]:
+                            dates_update.append(date)
+                            spans_update.append(span)
+
+                        i += 1
 
                 update_selection.update({
-                    'dates': dates_update
-                })
-
-            if last_metadata.get('spans')[-1] != metadata.get('spans')[0]:
-                new_spans = list(last_metadata.get('spans'))
-                new_spans.extend(metadata.get('spans'))
-
-                update_selection.update({
-                    'spans': new_spans
+                    'dates': dates_update,
+                    'spans': spans_update
                 })
 
         return update_selection
@@ -125,14 +134,6 @@ class Mediator(object):
 
         return metadata
 
-    def parse_timestamp(self, timestamp):
-        '''Parses an ISO 8601 timestamp'''
-        try:
-            return datetime.datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S')
-            
-        except ValueError:
-            return datetime.datetime.strptime(timestamp, '%Y-%m-%d')
-        
     def save(self, collection_name, instance):
         '''Transforms contents of Data Frame into JSON representation for MongoDB'''
         if collection_name in RESERVED_COLLECTION_NAMES:
@@ -298,10 +299,19 @@ class Grid3DMediator(Mediator):
 
         # Create the data document itself
         data_dict = {
-            '_id': self.parse_timestamp(instance.timestamp),
-            '_span': instance.spans or None #TODO Find the right span for this time frame
+            '_id': parser.parse(instance.timestamp)
         }
-        
+
+        if getattr(instance, 'spans', None) is not None:
+            try:
+                metadata = instance.describe()
+                data_dict['_span'] = metadata['spans'][
+                    metadata['dates'].index(instance.timestamp)
+                ]
+
+            except ValueError:
+                data_dict['_span'] = instance.spans[0]
+
         for param in instance.parameters:
             if getattr(instance, 'precision', None) is not None:
                 data_dict[param] = map(lambda x: round(x[1], instance.precision),
@@ -311,7 +321,7 @@ class Grid3DMediator(Mediator):
                 data_dict[param] = df[param].tolist()
 
         self.client[self.db_name][collection_name].insert(data_dict)
-        self.generate_metadata(collection_name, instance)#TODO Untested
+        self.generate_metadata(collection_name, instance)
 
     def summarize(self, collection_name, query={}):
         df = self.load(collection_name, query).values()[0]
