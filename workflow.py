@@ -26,6 +26,15 @@ class StanfordSuite(Suite):
 
 
 class StanfordKrigedXCO2(StanfordSuite):
+    '''
+    latitude    longitude   value   error   ...
+    ...         ...         ...     ...
+
+    octave-3.2.4:8> size(krigedData)
+    ans =
+
+        12414       9
+    '''
     collection_name = 'test_r2_xco2'
     file_matcher = re.compile(r'^Kriged.*\.mat$')
     model = KrigedXCO2Matrix
