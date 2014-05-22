@@ -1,29 +1,6 @@
 '''
 Data models for various science model outputs, including models that map from
 flat files and hierarchical files (e.g. HDF5) to Python pandas Data Frames.
-Example JSON configuration file for a model:
-
-{
-    "columns": [], # The column order
-    "geometry": { # Only applies for non-structured data
-        # True to specify that each document is a FeatureCollection; if False,
-        #   each row will be stored as a separate document (a separate simple feature)
-        "is_collection": false,
-        "type": "Point" # The WKT type to make for each row
-    },
-    "header": [], # The human-readable column headers, in order
-    "step": null, # The time step (seconds) between observations (documents)
-    "parameters": [], # The names of those data fields other than space and time fields
-    "span": null, # The amount of time (ms) for which the measurements are valid after the timestamp
-    "gridres": { # Mutually exclusive with the "geometry" key
-        "units": "degrees",
-        "x": 0.5, # Grid cell resolution in the x direction
-        "y": 0.5, # Grid cell resolution in the y direction
-    },
-    "timestamp": null, # The ISO 8601 timestamp
-    "units": {}, # The units of measurement for each parameter
-    "var_name": null, # The Matlab/HDF5 variable of interest
-}
 '''
 
 import datetime
@@ -178,6 +155,7 @@ class CovarianceMatrix(TransformationInterface):
         self.__metadata__ = {
             'dates': [self.timestamp],
             'gridded': True,
+            'precision': getattr(self, 'precision', 2)
         }
 
         super(CovarianceMatrix, self).describe(df, **kwargs)
@@ -208,7 +186,7 @@ class SpatioTemporalMatrix(TransformationInterface):
     an arbitrary number of columns following each representing one step in time.
     '''
     def __init__(self, path, config_file=None, *args, **kwargs):
-        self.precision = 5 
+        self.precision = 2
         self.columns = ['x', 'y']
         self.formats = {
             'x': '%.5f',
@@ -308,6 +286,7 @@ class XCO2Matrix(TransformationInterface):
     year, retrieval error (ppm).
     '''
     def __init__(self, path, *args, **kwargs):
+        self.precision = 1
         self.columns = ['x', 'y', 'value', '%j', '%Y', 'error']
         self.formats = {
             'x': '%.5f',
@@ -379,6 +358,7 @@ class KrigedXCO2Matrix(TransformationInterface):
     Columns: Longitude, latitude, XCO2 concentration (ppm), retrieval error (ppm)
     '''
     def __init__(self, path, *args, **kwargs):
+        self.precision = 1
         self.columns = ['y', 'x', 'values', 'errors', '4', '5', '6', '7', '8']
         self.formats = {
             'x': '%.5f',
