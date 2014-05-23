@@ -6,8 +6,49 @@ import unittest
 import pandas as pd
 import numpy as np
 import h5py
+import manage
 from fluxpy.models import KrigedXCO2Matrix, SpatioTemporalMatrix, XCO2Matrix
 from fluxpy.mediators import Grid3DMediator, Grid4DMediator, Unstructured3DMediator
+
+class TestManage(unittest.TestCase):
+    '''Tests manage.py command line functionality'''
+    
+    def test_load_command(self):
+        '''
+        commands to test:
+        
+        # basic usage test, using config_file in default location:s
+        python manage.py load -p casagfed2004.mat -n casa_gfed_load_test -m SpatioTemporalMatrix
+        
+        # using config_file in specified location:
+        python manage.py load -p casagfed2004.mat -n casa_gfed_load_test -m SpatioTemporalMatrix -c casagfed2004_alt.json
+        
+        # test a load wherein config_file params are overwritten by command line opts:
+        python manage.py load -p casagfed2004.mat -n casa_gfed_load_test -m SpatioTemporalMatrix -v wackadoo -t 2003-12-22T03:00:00
+        '''
+    
+    def test_remove_command(self):
+        '''
+        commands to test:
+        
+        python manage.py remove -n casa_gfed_load_test
+        '''
+    
+    def test_db_tools(self):
+        '''
+        commands to test:
+      
+        # test all iterations of db command:
+        python manage.py db -l collections
+        python manage.py db -l collections -x
+        python manage.py db -l metadata
+        python manage.py db -l coord_index
+        
+        python manage.py db -n casa_gfed_2004
+        
+        python manage.py db -a
+        '''
+
 
 class TestSpatioTemporalMatrixes(unittest.TestCase):
     '''Tests for proper handling of inverted CO2 surface fluxes (e.g. CASA GFED output)'''
