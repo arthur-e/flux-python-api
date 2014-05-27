@@ -444,4 +444,7 @@ class KrigedXCO2Matrix(TransformationInterface):
 
         return df
 
+    def get_coords(self):
+        return self.extract().apply(lambda c: [c['x'], c['y']], 1)
+
 

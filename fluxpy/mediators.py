@@ -98,6 +98,16 @@ class Mediator(object):
 
         return update_selection
 
+    def copy_grid_geometry(self, reference_name):
+        coords = self.client[self.db_name]['coord_index'].find({
+            '_id': reference_name
+        }).next()['i']
+
+        self.client[self.db_name]['coord_index'].insert({
+            '_id': collection_name,
+            'i': coords
+        })
+
     def generate_metadata(self, collection_name, instance, force=False):
         '''
         Creates an entry in the metadata collection for this instance of data;
@@ -149,16 +159,6 @@ class Grid4DMediator(Mediator):
     time steps (frames). Geometry expected as grid centroids (e.g. centroids
     of 1-degree grid cells).
     '''
-
-    def copy_grid_geometry(self, reference_name):
-        coords = self.client[self.db_name]['coord_index'].find({
-            '_id': reference_name
-        }).next()['i']
-
-        self.client[self.db_name]['coord_index'].insert({
-            '_id': collection_name,
-            'i': coords
-        })
 
     def load(self, collection_name, query):
         # Retrieve a cursor to iterate over the records matching the query
@@ -245,6 +245,22 @@ class Grid3DMediator(Mediator):
     Additional fields beyond the "values" field may be included; currently
     supported is the additional "errors" field.
     '''
+
+    def __align__(self, instance, alignment):
+        df = instance.extract()
+
+        # Get a list of column names for only the essential parameters
+        cols = ['x', 'y']
+        cols.extend(instance.parameters)
+
+        # Remove extraneous columns; create the index on the incoming data frame
+        dfm = df.ix[df.index, cols].set_index(['x', 'y'])
+
+        # Get the two aligned DataFrames
+        empty, aligned = alignment.align(dfm, axis=0)
+
+        return aligned
+
     def load(self, collection_name, query={}):
         # Retrieve a cursor to iterate over the records matching the query
         cursor = self.client[self.db_name][collection_name].find(query, {
@@ -281,10 +297,15 @@ class Grid3DMediator(Mediator):
 
         return dict(zip(ids, frames))
 
-    def save(self, collection_name, instance):
+    def save(self, collection_name, instance, alignment=None):
         super(Grid3DMediator, self).save(collection_name, instance)
 
-        df = instance.extract()
+        if alignment is not None:
+            #TODO Is reset_index() undoing the alignment?
+            df = self.__align__(instance, alignment).reset_index()
+
+        else:
+            df = instance.extract()
 
         # Expect that a valid timestamp was provided
         if instance.timestamp is None:
@@ -296,7 +317,7 @@ class Grid3DMediator(Mediator):
         }).count() == 0:
             i = self.client[self.db_name]['coord_index'].insert({
                 '_id': collection_name,
-                'i': [i for i in df.apply(lambda c: [c['x'], c['y']], 1)]
+                'i': df.apply(lambda c: [c['x'], c['y']], 1).tolist()
             })
 
         # Create the data document itself

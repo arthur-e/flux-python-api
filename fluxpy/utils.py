@@ -1,26 +1,84 @@
+import os
+import sys
+import re
 import pandas as pd
 import numpy as np
+from pymongo.errors import DuplicateKeyError
 
-def infer_time_series_freq(values):
-    med = np.median(np.diff(values))
-    seconds = int(med.astype('timedelta64[s]').item().total_seconds())
+class Suite(object):
+    def __init__(self):
+        pass    
 
-    if seconds < 60:
-        return '{}s'.format(seconds)
+    def get_listing(self, path=None, regex=None):
+        '''Gets a sequence of matching file paths'''
+        path = path or self.path
+        regex = regex or self.file_matcher
+        paths = []
+        for filename in os.listdir(path):
+            if regex.match(filename) is not None:
+                paths.append(os.path.join(path, filename))
 
-    if seconds < 3600:
-        return freq = '{}T'.format(int(seconds / 60))
+        return tuple(paths)
 
-    if seconds < 86400:
-        return freq = '{}H'.format(int(seconds / 3600))
+    def define_common_grid(self, model=None):
+        '''Defines a common XY grid for multiple DataFrames'''
 
-    if seconds < 604800:
-        return freq = '{}D'.format(int(seconds / 86400))
+        # It is likely that a new model needs to be provided (probably a
+        #   superclass of the correct data model; otherwise, an extract()
+        #   method that relies on a common grid will create a circular reference
+        model = model or self.model
+        instances = map(model, self.get_listing())
 
-    if seconds < 2678400:
-        return freq = '{}W'.format(int(seconds / 604800))
+        # Get the first data frame as a target
+        dfm = instances[0].extract()
+        dfm_xy = dfm.ix[dfm.index, ['x', 'y']]
 
-    if seconds < 7948800:
-        return freq = '{}M'.format(int(seconds / 2678400))
-    
-    return '{}Q'.format(int(seconds / 7948800))
+        # Recursively merge each succeeding DataFrame with the target
+        for instance in instances[1:]:
+            try:
+                df = instance.extract()
+
+            except AssertionError:
+                continue
+
+            df_xy = df.ix[df.index, ['x', 'y']]
+            dfm_xy = pd.merge(dfm_xy, df_xy, on=['x', 'y'], how='outer')
+
+        # Create a MultiIndex on the two columns
+        dfm_xy = dfm_xy.set_index(['x', 'y'])
+
+        return dfm_xy
+
+    def main(self):
+        '''Does a naive bulk insert (not optimized); supports alignment'''
+
+        sys.stderr.write('\rDefining a common grid...\n')
+        grid = self.define_common_grid()
+
+        paths = self.get_listing()
+        i = 1
+        j = len(paths)
+        for path in paths:
+            instance = self.model(path)
+
+            try:
+                self.mediator.save(self.collection_name, instance, grid)
+
+            except AssertionError:
+                sys.stderr.write('\rSkipping error in %d of %d (%s)...' % (i, j, instance.timestamp))
+                i += 1
+                continue
+
+            except DuplicateKeyError:
+                sys.stderr.write('\rSkipping duplicate %d of %d (%s)...' % (i, j, instance.timestamp))
+                i += 1
+                continue
+
+            sys.stderr.write('\rSaving %d of %d (%s)...' % (i, j, instance.timestamp))
+            i += 1
+
+        sys.stderr.write('\rFinished saving %d records...' % j)
+
+
+
+
