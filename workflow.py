@@ -15,7 +15,7 @@ class StanfordKrigedXCO2(Suite):
 
         12414       9
     '''
-    collection_name = 'test_r2_xco2'
+    collection_name = 'test3_r2_xco2'
     file_matcher = re.compile(r'^Kriged.*\.mat$')
     model = KrigedXCO2Matrix
     path = '/net/nas3/data/gis_lab/project/NASA_ACOS_Visualization/Data/xco2/'

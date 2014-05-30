@@ -259,7 +259,8 @@ class Grid3DMediator(Mediator):
         # Get the two aligned DataFrames
         empty, aligned = alignment.align(dfm, axis=0)
 
-        return aligned
+        # Return None in place of NaN
+        return aligned.where((pd.notnull(aligned)), None)
 
     def load(self, collection_name, query={}):
         # Retrieve a cursor to iterate over the records matching the query
@@ -301,7 +302,6 @@ class Grid3DMediator(Mediator):
         super(Grid3DMediator, self).save(collection_name, instance)
 
         if alignment is not None:
-            #TODO Is reset_index() undoing the alignment?
             df = self.__align__(instance, alignment).reset_index()
 
         else:
@@ -317,7 +317,7 @@ class Grid3DMediator(Mediator):
         }).count() == 0:
             i = self.client[self.db_name]['coord_index'].insert({
                 '_id': collection_name,
-                'i': df.apply(lambda c: [c['x'], c['y']], 1).tolist()
+                'i': df.set_index(['x', 'y']).index.tolist()
             })
 
         # Create the data document itself
@@ -337,8 +337,8 @@ class Grid3DMediator(Mediator):
 
         for param in instance.parameters:
             if getattr(instance, 'precision', None) is not None:
-                data_dict[param] = map(lambda x: round(x[1], instance.precision),
-                    df[param].iterkv())#TODO Untested
+                data_dict[param] = map(lambda x: round(x[1],
+                    instance.precision) if x[1] is not None else None, df[param].iterkv())
 
             else:
                 data_dict[param] = df[param].tolist()
