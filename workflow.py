@@ -23,6 +23,36 @@ class StanfordKrigedXCO2(Suite):
     def __init__(self):
         self.mediator = Grid3DMediator()
 
+    def main(self):
+        '''Does a naive bulk insert (not optimized); supports alignment'''
+
+        sys.stderr.write('\rDefining a common grid...\n')
+        grid = self.define_common_grid()
+
+        paths = self.get_listing()
+        i = 1
+        j = len(paths)
+        for path in paths:
+            instance = self.model(path)
+
+            try:
+                self.mediator.save(self.collection_name, instance, grid)
+
+            except AssertionError:
+                sys.stderr.write('\rSkipping error in %d of %d (%s)...' % (i, j, instance.timestamp))
+                i += 1
+                continue
+
+            except DuplicateKeyError:
+                sys.stderr.write('\rSkipping duplicate %d of %d (%s)...' % (i, j, instance.timestamp))
+                i += 1
+                continue
+
+            sys.stderr.write('\rSaving %d of %d (%s)...' % (i, j, instance.timestamp))
+            i += 1
+
+        sys.stderr.write('\rFinished saving %d records...' % j)
+
 
 if __name__ == '__main__':
     # To import the 2004 CASA GFED run...
