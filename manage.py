@@ -84,7 +84,7 @@ manage.py db
     
     Requires one of the following flags:
     
-        -l, --list               Lists collection names in the database.
+        -l, --list_ids           Lists collection names in the database.
         
              Optional args with -l flag:
                  collections :   lists collections
@@ -125,40 +125,33 @@ usage_all = ('\n' + '-'*30).join([usage_hdr,usage_load,usage_remove,usage_db])
 # map of valid options (and whether or not they are required) for each command
 # -one current naivete: this setup assumes all boolean options are not required, which just happens to be the case (for now)
 commands = {
-        'load' : {
-                  'path': True,
+        'load' : {'path': True,
                   'model': True,
                   'collection_name': True,
                   'timestamp': False,
                   'var_name': False,
-                  'config_file': False
-        },
-        'remove': {
-                   'collection_name': True
-        },
+                  'config_file': False},
+            
+        'remove': {'collection_name': True},
         
-        'db': {
-               'list': False,
+        'db': {'list_ids': False,
                'collection_name': False,
                'include_counts': False,
-               'audit': False,
-        },
-    }
+               'audit': False},
+        }
 
 # lists all possible options (for ALL commands) and their corresponding short flags
 # colons (:) indicate that option must be followed by an argument
-options = {
-             'help': 'h',
-             'path': 'p:',
-             'timestamp': 't:',
-             'model': 'm:',
-             'var_name': 'v:',
-             'collection_name': 'n:',
-             'config_file': 'c:',
-             'include_counts': 'x',
-             'list': 'l:',
-             'audit': 'a',
-             }
+options = {'help': 'h',
+           'path': 'p:',
+           'timestamp': 't:',
+           'model': 'm:',
+           'var_name': 'v:',
+           'collection_name': 'n:',
+           'config_file': 'c:',
+           'include_counts': 'x',
+           'list_ids': 'l:',
+           'audit': 'a'}
 
 # useful variables built from the options dict
 opt_pairs = [('--' + o[0], '-' + o[1].rstrip(':')) for o in options.items()]
@@ -188,7 +181,10 @@ def main(argv):
         opts, args = getopt.getopt(argv[1:],optstring_short,optstring_long)
     except getopt.GetoptError, exc:
         print '\n' + exc.msg
-        print "\nFor detailed usage info, use:\npython manage.py -h\n"
+        print "\nFor detailed usage info for the '{0}' command, use:\n" \
+              "python manage.py {0} -h\n" \
+              "\nFor detailed usage info for manage.py in general, use:\n" \
+              "python manage.py -h\n".format(command)
         sys.exit(2)
         
     for opt, arg in opts:
@@ -233,7 +229,9 @@ def _load(path, model, collection_name, **kwargs):
                                   **kwargs)
     
     # TBD: modify this to call the appropriate mediator...
-    mediator = Grid4DMediator().save(collection_name, inst)
+    mediator = Grid4DMediator().save(collection_name, inst, verbose=True)
+
+    sys.stderr.write('\nUpload complete!\n')
 
 def _remove(collection_name):
     """
@@ -242,34 +240,36 @@ def _remove(collection_name):
     """
     db = _open_db_connection()
 
-    if collection_name in db.collection_names():
+    if (collection_name in db.collection_names() or
+        collection_name in _return_id_list(db,'metadata') or
+        collection_name in _return_id_list(db,'coord_index')):
         db[collection_name].drop()
         db['metadata'].remove({'_id': collection_name})
         db['coord_index'].remove({'_id': collection_name})
         
-        print 'Collection ID "{0}" successfully removed from ' \
-              'database!'.format(collection_name)
+        print '\nCollection ID "{0}" successfully removed from ' \
+              'database!\n'.format(collection_name)
     else:
         print '\nCollection ID "{0}" does not exist. ' \
               'Existing collections include:'.format(collection_name)
-        _list_collections(list='collections')
+        _db(list_ids='collections')
 
-def _db(list=None,collection_name=None,audit=None,include_counts=False):
+def _db(list_ids=None,collection_name=None,audit=None,include_counts=False):
     """
     Sub-parser for the db command- checks valid args and calls
     appropriate functions
     """
     print
     list_valid_values = ['collections','metadata','coord_index']
-    if list:
-        if list in list_valid_values:
-            if list not in ['collections',''] and include_counts:
+    if list_ids:
+        if list_ids in list_valid_values:
+            if list_ids not in ['collections',''] and include_counts:
                 print 'Option -x (for including record counts) is not valid ' \
-                      'for the {0} argument, ignoring.'.format(list)
-            _list(list=list,include_counts=include_counts)
+                      'for the {0} argument, ignoring.'.format(list_ids)
+            _list(list_ids=list_ids,include_counts=include_counts)
         else:
             print 'Invalid argument for [-l | --list]: {0}' \
-                  '\nValid values include:'.format(list)
+                  '\nValid values include:'.format(list_ids)
             print list_valid_values
             sys.exit(2)
     
@@ -280,21 +280,27 @@ def _db(list=None,collection_name=None,audit=None,include_counts=False):
         _audit()
     print
     
-def _list(list='collections',include_counts=False):
+def _list(list_ids='collections',include_counts=False):
     """
     Database diagnostic tool for listing collection IDs
     """
     db = _open_db_connection()
 
-    if list in ['collections','']:
+    if list_ids in ['collections','']:
         for c in db.collection_names():
             if c not in RESERVED_COLLECTION_NAMES + ('system.indexes',):
                 print c + (': %i' % db[c].count() if include_counts else '')
     else:
-        col = db[list]
-        for doc in col.find():
-            print doc['_id']
-         
+        for id in _return_id_list(db,list_ids):
+            print id
+
+def _return_id_list(db,collection_name):
+    """
+    Returns list of '_id' entries for the collection name provided
+    """
+    return [t['_id'] for t in list(db[collection_name].find())]
+
+
 def _show_metadata(collection_name=None):
     """
     Database diagnostic tool for showing metadata for a specified
@@ -328,15 +334,15 @@ def _audit():
     
         for c in existing_collections:
             if c not in m_entries:
-                print 'missing {0} entry for collection id "{1}"'.format(x,c)
+                print 'INCONSISTENCY FOUND: missing {0} entry for collection ID "{1}"'.format(x,c)                    
                 all_good = False
         
         for m in m_entries:
             if m not in existing_collections:
-                print 'stale entry for collection id "{0}" in {1}'.format(m,x)
+                print 'INCONSISTENCY FOUND: stale entry for collection ID "{0}" in {1}'.format(m,x)
                 all_good = False
                 
-    print 'Database auditing complete.',
+    print '\nDatabase auditing complete.\n',
     if all_good: print 'No inconsistencies found!'
     
 
