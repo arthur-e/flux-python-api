@@ -65,23 +65,38 @@ If not using a python virtual environment, simply run **setup.py** ::
 **Loading data**
 ================================
 
-Use the **load.py** utility to load flux data from files that are in Matlab (*\*.mat*) or HDF5 (*\*.h5* or *\*.mat*) format. A description of the required configuration file and examples are provided in the next sections. 
+Use the **manage.py load** utility to load flux data from files that are in Matlab (*\*.mat*) or HDF5 (*\*.h5* or *\*.mat*) format. A description of the required configuration file and examples are provided in the next sections. 
 
-Usage::
+Loading with **manage.py load**::
 
-	load.py -i <inputfile> [OPTIONAL ARGUMENTS]
+    Usage:
+        manage.py load -p <filepath> -m <model> -n <collection_name> [OPTIONAL ARGS]
+        
+    Required argument:
     
-	Required argument:
-	    -i, --ifile          Input file in Matlab (*.mat) or HDF5 (*.h5 or *.mat) format 
-	
-	Optional arguments:
-	    -c, --config_file    Specify location of json config file. By default, uses
-	                         input file w/ .json extension.
-	
-	These optional args can be used to override specifications of the config file:
-	    -n, --var_name       The name of the variable in the hierarchical file
-	                         that stores the data
-	    -t, --timestamp      An ISO 8601 timestamp for the first observation
+        -p, --path               Directory path of input file in Matlab (*.mat)
+                                 or HDF5 (*.h5 or *.mat) format 
+                                 
+        -n, --collection_name    Collection name for the input file (MongoDB
+                                 identifier)
+        
+        -m, --model              fluxpy/models.py model associated with the
+                                 input dataset  
+    
+    Optional arguments:
+    
+        -c, --config_file        Specify location of json config file. By
+                                 default, seeks input file w/ .json extension.
+    
+    These optional args can be used to override specifications of the config file:
+    
+        -v, --var_name           The name of the variable in the hierarchical
+                                 file that stores the data
+                                 
+        -t, --timestamp          An ISO 8601 timestamp for the first observation
+        
+        -T, --title              "Pretty" name, for displaying within
+                                 visualization application
 
 
 The configuration file
@@ -116,7 +131,7 @@ Configuration file parameter schema::
 
     "title": String,            // Human-readable "pretty" name for the data set 
     
-    "units": [String],          // Array of units for each field, in order
+    "units": Object,          	// The measurement units, per parameter
 
     "var_name": String         	// The name of the variable in the hierarchical
                                 // file which stores the data
@@ -125,40 +140,131 @@ Configuration file parameter schema::
 Contents of an example configuration file are shown here::
 
 	{
-	    "columns": ["x","y"],       
+	    "columns": ["x","y"],
 	    "gridres": {
-			"units": "degrees",
-			"x": 1.0,
-			"y": 1.0
+		"units": "degrees",
+		    "x": 1.0,
+		    "y": 1.0
 		},
-	    "header": ["lng","lat"],  
-	    "parameters": ["value","error"],
-	    "span": "",           
-	    "step": 10800,
+	    "header": [
+	        "lng",
+	        "lat"
+	    ],
+	    "parameters": ["values"],
+	    "steps": [10800],
 	    "timestamp": "2012-12-22T03:00:00",
 	    "title": "Surface Carbon Flux",
-	    "units": ["degrees","degrees"],
+	    "units": {
+	        "x": "degrees",
+	        "y": "degrees",
+	        "values": "&mu;mol/m&sup2;"
+	    },
 	    "var_name": "casa_gfed_2004"
 	}
 
 
-Example usage of **load.py**
------------------------------
 
-Most basic example; assumes a configuration file exists at *~/mydata/data_casa_gfed_3hrly.json*)::
+**manage.py load** examples
+-----------------------------------
+
+Most basic example; assumes a configuration file exists at *~/mydata/data_casa_gfed_3hrly.json*::
 	
-	load.py -i ~/mydata/data_casa_gfed_3hrly.mat
-		
-Using command line arguments to override configuration file parameters *var_name* and *timestamp*::
+	$ python manage.py load -p ~/data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004
 
-    load.py -i ~/mydata/data_casa_gfed_3hrly.mat -t 2003-12-22T03:00:00 -n casa_gfed_2004
+Specify an alternate config file to use::
+
+	$ python manage.py load -p ~/data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004 -c ~/config/casa_gfed.json
+
+In the following example, the program will look for a config file at ~/data_casa_gfed.json and overwrite the timestamp and var_name specifications in that file with those provided as command line args::
     
-Specifying a configuration file at a non-default location::
-
-	load.py -i ~/mydata/data_casa_gfed_3hrly.mat -c -i ~/mydata/my_config_file.json
+    $ python manage.py load -p ~/data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004 -t 2003-12-22T03:00:00 -v casa_gfed_2004
 
 
+
+**Removing data**
+================================
     
+Use the **manage.py remove** utility to remove data collections from the database::
+
+    $ manage.py remove -n <collection_name>
+        
+    Required argument:
+        -n, --collection_name    Collection name to be removed (MongoDB identifier)
+
+**manage.py remove** example
+-----------------------------------
+   
+::
+
+	$ python manage.py remove -n casa_gfed_2004
+	
+
+**Renaming collections**
+================================
+    
+Use the **manage.py rename** utility to rename data collections in the database::
+
+    $ manage.py rename -n <collection_name> -r <new_name>
+        
+    Required arguments:
+        -n, --collection_name    Collection name to be removed (MongoDB identifier)
+        -r, --new_name           New name for the collection       
+
+**manage.py rename** example
+-----------------------------------
+   
+::
+
+	$ python manage.py rename -n casa_gfed_2004 -r casa_2004
 
 
+**Database diagnostics**
+================================
+Use the **manage.py db** utility to get diagnostic information on database contents::
 
+    $ manage.py db [OPTIONAL ARGUMENTS]
+    
+    Requires one of the following flags:
+    
+        -l, --list_ids           Lists collection names in the database.
+        
+             Optional args with -l flag:
+                 collections :   lists collections
+                 metadata:       lists the collections w/ metadata entries
+                 coord_index:    lists the collections w/ coord_index entries
+                                     
+        -n, --collection_name    Collection name for which to shows metadata
+        
+        -a, --audit              No argument required. Performs audit of the
+                                 database, reporting any collections that are
+                                 missing corresponding metadata/coord_index
+                                 entries and any stale metadata/coord_index
+                                 entries without corresponding collections
+    
+    Optional argument:
+    
+        -x, --include_counts     Include count of records within each listed
+                                 collection. Valid only with a corresponding
+                                 "-l collections" flag; ignored otherwise
+
+**manage.py db** examples
+-----------------------------------
+        
+List all collections and their number of records::
+
+	$ python manage.py db -l collections -x
+
+
+List all the collections with metadata entries::
+
+    $ python manage.py db -l metadata
+
+
+Show metadata for the collection with id "casa_gfed_2004"::
+
+    $ python manage.py db -n casa_gfed_2004 
+
+
+Audit the database::
+
+    $ python manage.py db -a
