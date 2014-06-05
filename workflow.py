@@ -1,31 +1,11 @@
 import os
 import re
 import sys
-from pymongo.errors import DuplicateKeyError
 from fluxpy.models import *
 from fluxpy.mediators import *
+from fluxpy.utils import Suite
 
-class Suite(object):
-    def __init__(self):
-        pass    
-
-    def get_listing(self, path=None, regex=None):
-        path = path or self.path
-        regex = regex or self.file_matcher
-        paths = []
-        for filename in os.listdir(path):
-            if regex.match(filename) is not None:
-                paths.append(os.path.join(path, filename))
-
-        return paths
-
-
-class StanfordSuite(Suite):
-    def __init__(self):
-        pass
-
-
-class StanfordKrigedXCO2(StanfordSuite):
+class StanfordKrigedXCO2(Suite):
     '''
     latitude    longitude   value   error   ...
     ...         ...         ...     ...
@@ -44,6 +24,11 @@ class StanfordKrigedXCO2(StanfordSuite):
         self.mediator = Grid3DMediator()
 
     def main(self):
+        '''Does a naive bulk insert (not optimized); supports alignment'''
+
+        sys.stderr.write('\rDefining a common grid...\n')
+        grid = self.define_common_grid()
+
         paths = self.get_listing()
         i = 1
         j = len(paths)
@@ -51,7 +36,7 @@ class StanfordKrigedXCO2(StanfordSuite):
             instance = self.model(path)
 
             try:
-                self.mediator.save(self.collection_name, instance)
+                self.mediator.save(self.collection_name, instance, grid)
 
             except AssertionError:
                 sys.stderr.write('\rSkipping error in %d of %d (%s)...' % (i, j, instance.timestamp))

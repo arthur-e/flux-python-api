@@ -98,14 +98,21 @@ class Mediator(object):
 
         return update_selection
 
-    def generate_metadata(self, collection_name, instance, force=False, verbose=False):
+    def copy_grid_geometry(self, reference_name):
+        coords = self.client[self.db_name]['coord_index'].find({
+            '_id': reference_name
+        }).next()['i']
+
+        self.client[self.db_name]['coord_index'].insert({
+            '_id': collection_name,
+            'i': coords
+        })
+
+    def generate_metadata(self, collection_name, instance, force=False):
         '''
         Creates an entry in the metadata collection for this instance of data;
         updates the summary statistics of that entry if it already exists.
         '''
-        
-        if verbose: sys.stderr.write('\nGenerating metadata...')
-        
         # Get the metadata
         metadata = instance.describe()
 
@@ -153,16 +160,6 @@ class Grid4DMediator(Mediator):
     of 1-degree grid cells).
     '''
 
-    def copy_grid_geometry(self, reference_name):
-        coords = self.client[self.db_name]['coord_index'].find({
-            '_id': reference_name
-        }).next()['i']
-
-        self.client[self.db_name]['coord_index'].insert({
-            '_id': collection_name,
-            'i': coords
-        })
-
     def load(self, collection_name, query):
         # Retrieve a cursor to iterate over the records matching the query
         cursor = self.client[self.db_name][collection_name].find(query, {
@@ -195,7 +192,7 @@ class Grid4DMediator(Mediator):
 
         return dfm
 
-    def save(self, collection_name, instance, verbose=False):
+    def save(self, collection_name, instance):
         super(Grid4DMediator, self).save(collection_name, instance)
 
         df = instance.extract()
@@ -210,8 +207,7 @@ class Grid4DMediator(Mediator):
             })
 
         # Iterate over the transpose of the data frame
-        total_records = len(df.T)
-        for i, (timestamp, series) in enumerate(df.T.iterrows()):
+        for timestamp, series in df.T.iterrows():
             if getattr(instance, 'precision', None) is not None:
                 self.client[self.db_name][collection_name].insert({
                     '_id': timestamp,
@@ -224,11 +220,8 @@ class Grid4DMediator(Mediator):
                     '_id': timestamp,
                     'values': series.tolist()
                 })
-                
-            if verbose: sys.stderr.write('\rInserted %d of %d records...'
-                                 % (i+1, total_records))
-            
-        self.generate_metadata(collection_name, instance, verbose=verbose)
+
+        self.generate_metadata(collection_name, instance)
 
     def summarize(self, collection_name, query={}):
         df = self.load(collection_name, query)
@@ -252,6 +245,23 @@ class Grid3DMediator(Mediator):
     Additional fields beyond the "values" field may be included; currently
     supported is the additional "errors" field.
     '''
+
+    def __align__(self, instance, alignment):
+        df = instance.extract()
+
+        # Get a list of column names for only the essential parameters
+        cols = ['x', 'y']
+        cols.extend(instance.parameters)
+
+        # Remove extraneous columns; create the index on the incoming data frame
+        dfm = df.ix[df.index, cols].set_index(['x', 'y'])
+
+        # Get the two aligned DataFrames
+        empty, aligned = alignment.align(dfm, axis=0)
+
+        # Return None in place of NaN
+        return aligned.where((pd.notnull(aligned)), None)
+
     def load(self, collection_name, query={}):
         # Retrieve a cursor to iterate over the records matching the query
         cursor = self.client[self.db_name][collection_name].find(query, {
@@ -288,10 +298,14 @@ class Grid3DMediator(Mediator):
 
         return dict(zip(ids, frames))
 
-    def save(self, collection_name, instance, verbose=False):
+    def save(self, collection_name, instance, alignment=None):
         super(Grid3DMediator, self).save(collection_name, instance)
 
-        df = instance.extract()
+        if alignment is not None:
+            df = self.__align__(instance, alignment).reset_index()
+
+        else:
+            df = instance.extract()
 
         # Expect that a valid timestamp was provided
         if instance.timestamp is None:
@@ -303,7 +317,7 @@ class Grid3DMediator(Mediator):
         }).count() == 0:
             i = self.client[self.db_name]['coord_index'].insert({
                 '_id': collection_name,
-                'i': [i for i in df.apply(lambda c: [c['x'], c['y']], 1)]
+                'i': df.set_index(['x', 'y']).index.tolist()
             })
 
         # Create the data document itself
@@ -322,16 +336,13 @@ class Grid3DMediator(Mediator):
                 data_dict['_span'] = instance.spans[0]
 
         for param in instance.parameters:
-            if verbose: sys.stderr.write('\nProcessing data for parameter: {0}...'.format(param))
             if getattr(instance, 'precision', None) is not None:
-                data_dict[param] = map(lambda x: round(x[1], instance.precision),
-                    df[param].iterkv())#TODO Untested
+                data_dict[param] = map(lambda x: round(x[1],
+                    instance.precision) if x[1] is not None else None, df[param].iterkv())
 
             else:
                 data_dict[param] = df[param].tolist()
-        
-        if verbose: sys.stderr.write('\nInserting records...')
-        
+
         self.client[self.db_name][collection_name].insert(data_dict)
         self.generate_metadata(collection_name, instance)
 
@@ -359,7 +370,7 @@ class Unstructured3DMediator(Mediator):
     value dimension (3D).
     '''
     
-    def save(self, collection_name, instance, verbose=False):
+    def save(self, collection_name, instance):
         super(Unstructured3DMediator, self).save(collection_name, instance)
 
         df = instance.extract()
@@ -376,18 +387,14 @@ class Unstructured3DMediator(Mediator):
                 'timestamp': series['timestamp']
             })
 
-        if instance.geometry.get('isCollection'):
-            if verbose: sys.stderr.write('\nInserting records...')                
+        if instance.geometry.get('isCollection'):                
             j = self.client[self.db_name][collection_name].insert({
                 'features': features
             })
             
         else:
-            total_records = len(features)
-            for i,feature in enumerate(features):
+            for feature in features:
                 j = self.client[self.db_name][collection_name].insert(feature)
-                if verbose: sys.stderr.write('\rInserted %d of %d records...'
-                                 % (i+1, total_records))
 
 
 

@@ -2,7 +2,7 @@
 # Metadata Schema #
 ###################
 
-Last updated: April 25, 2014.
+Last updated: May 23, 2014.
 
 ########################################
 ## Required Parameters for Web Client ##
@@ -50,7 +50,7 @@ Last updated: April 25, 2014.
         }
     },
 
-    "spans": [String],          // Array of lengths of time as Pandas "freq" codes
+    "spans": [String],          // Array of lengths of time, in seconds,
                                 // that each observation spans; there is more than
                                 // one in this list of the span changes at a
                                 // corresponding data in the "dates" Array
@@ -125,7 +125,7 @@ the data model (TransformationInterface) is compatible.
                                 //  parameter
     },
 
-    "spans": Array,             // The length of time, as Pandas "freq" codes, 
+    "spans": Array,             // The length of time, in seconds, 
                                 // that an observation spans
 
     "steps": Array,             // The length of time, in seconds, between each

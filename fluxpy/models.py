@@ -386,10 +386,11 @@ class KrigedXCO2Matrix(TransformationInterface):
         self.units = {
             'x': 'degrees',
             'y': 'degrees',
-            'value': 'ppm',
-            'error': 'ppm'
+            'values': 'ppm',
+            'errors': 'ppm'
         }
         self.var_name = 'krigedData'
+        self.title = 'Kriged XCO2 Test'
 
         super(KrigedXCO2Matrix, self).__init__(path, *args, **kwargs)
 
@@ -443,5 +444,8 @@ class KrigedXCO2Matrix(TransformationInterface):
             df[col] = df[col].map(lambda x: float(self.formats[col] % x))
 
         return df
+
+    def get_coords(self):
+        return self.extract().apply(lambda c: [c['x'], c['y']], 1)
 
 
