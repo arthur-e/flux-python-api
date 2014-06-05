@@ -211,7 +211,7 @@ class Grid4DMediator(Mediator):
 
         # Iterate over the transpose of the data frame
         total_records = len(df.T)
-        for timestamp, series in df.T.iterrows():
+        for i, (timestamp, series) in enumerate(df.T.iterrows()):
             if getattr(instance, 'precision', None) is not None:
                 self.client[self.db_name][collection_name].insert({
                     '_id': timestamp,
@@ -405,7 +405,7 @@ class Unstructured3DMediator(Mediator):
             
         else:
             total_records = len(features)
-            for feature in features:
+            for i,feature in enumerate(features):
                 j = self.client[self.db_name][collection_name].insert(feature)
                 if verbose: sys.stderr.write('\rInserted %d of %d records...'
                                  % (i+1, total_records))
