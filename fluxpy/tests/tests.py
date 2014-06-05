@@ -130,21 +130,15 @@ class TestSpatioTemporalMatrixes(unittest.TestCase):
             '_id': datetime.datetime(2004, 6, 30, 0, 0, 0),
         })
         self.assertEqual(len(query[0]['values']), 10)
-        self.assertEqual(query[0]['values'][0], 0.08028)
+        self.assertEqual(query[0]['values'][0], 0.08)
 
         # Test the mediator's summarize() method
         summary = self.mediator.summarize('test3')
-        expected_summary = {
-            'values': {
-                'max': 0.26999000000000001,
-                'mean': 0.14931662499999998,
-                'median': 0.1513225,
-                'min': 0.0,
-                'std': 0.0047259989513704238
-            }
-        }
-        
-        self.assertEqual(summary, expected_summary)
+
+        self.assertEqual(summary.keys(), ['values'])
+        self.assertEqual(summary['values'].keys(), [
+            'std', 'max', 'min', 'median', 'mean'
+        ])
 
     
 class TestXCO2Data(unittest.TestCase):
@@ -185,7 +179,7 @@ class TestXCO2Data(unittest.TestCase):
             timestamp='2009-06-15')
 
         self.assertEqual(xco2.var_name, 'XCO2')
-        self.assertEqual(xco2.steps, [86400])
+        self.assertEqual(xco2.spans, [518400])
         self.assertEqual(xco2.timestamp, '2009-06-15')
         
     def test_model_extract(self):
@@ -209,7 +203,7 @@ class TestXCO2Data(unittest.TestCase):
         query = self.mediator.client[self.mediator.db_name]['test'].find({
             'timestamp': datetime.datetime(2009, 6, 16, 0, 0, 0),
         })
-        self.assertEqual(query[0]['value'], 386.79)
+        self.assertEqual(query[0]['properties']['value'], 386.79)
 
 
 class TestKrigedXCO2Data(unittest.TestCase):
@@ -290,24 +284,10 @@ class TestKrigedXCO2Data(unittest.TestCase):
         summary = self.mediator.summarize('test2')
         self.maxDiff = None # Show the full diff
 
-        expected_summary = {
-            'errors': {
-                'std': 0.16354196638184409,
-                'max': 1.2717000000000001,
-                'min': 0.4541,
-                'median': 0.9009,
-                'mean': 0.88556415200562733
-            },
-            'values': {
-                'std': 1.5496076951756685,
-                'max': 391.35000000000002,
-                'min': 381.68000000000001,
-                'median': 386.37,
-                'mean': 386.29349542575756
-            }
-        }
-
-        self.assertEqual(summary, expected_summary)
+        self.assertEqual(summary.keys(), ['errors', 'values'])
+        self.assertEqual(summary['values'].keys(), [
+            'std', 'max', 'min', 'median', 'mean'
+        ])
 
 
 # class TestHDF5(unittest.TestCase):
