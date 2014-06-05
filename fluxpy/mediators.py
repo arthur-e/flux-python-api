@@ -383,33 +383,39 @@ class Unstructured3DMediator(Mediator):
     def save(self, collection_name, instance, verbose=False):
         super(Unstructured3DMediator, self).save(collection_name, instance)
 
+        is_multi = (instance.geometry.get('type')[0:5] == 'Multi')
+
         df = instance.extract()
-        
         features = []
         for i, series in df.iterrows():
-            features.append({
-                'coordinates': [
-                    series['x'],
-                    series['y']
-                ],
-                'value': series['value'],
-                'error': series['error'],
-                'timestamp': series['timestamp']
-            })
+            data_dict = {
+                'timestamp': series['timestamp'].to_datetime(),
+                'coordinates': [series['x'], series['y']],
+                'properties': dict()
+            }
 
-        if instance.geometry.get('isCollection'):
-            if verbose: sys.stderr.write('\nInserting records...')              
+            for param in instance.parameters:
+                data_dict['properties'][param] = series[param]
+
+            features.append(data_dict)
+
+        # If it's a collection, we can assume each data member is unique;
+        #   we insert a single document
+        if is_multi:
+            if verbose:
+                sys.stderr.write('\nInserting records...')
+
             j = self.client[self.db_name][collection_name].insert({
                 'features': features
             })
-            
+
+        # Otherwise, each data member may not be unique e.g. each is a POINT
+        #   among potentially other POINTs at the same date/time
         else:
             total_records = len(features)
-            for i,feature in enumerate(features):
+            for i, feature in enumerate(features):
                 j = self.client[self.db_name][collection_name].insert(feature)
-                if verbose: sys.stderr.write('\rInserted %d of %d records...'
-                                 % (i+1, total_records))
-
-
+                if verbose:
+                    sys.stderr.write('\rInserted %d of %d records...' % (i + 1, total_records))
 
 

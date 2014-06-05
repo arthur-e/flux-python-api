@@ -108,6 +108,7 @@ class TransformationInterface(object):
             self.__metadata__ = dict()
 
         self.__metadata__.update({
+            'gridded': getattr(self, 'gridded', True),
             'gridres': getattr(self, 'gridres', {}),
             'title': getattr(self, 'title', ''),
             'units': getattr(self, 'units', {})
@@ -192,6 +193,7 @@ class SpatioTemporalMatrix(TransformationInterface):
             'x': '%.5f',
             'y': '%.5f'
         }
+        self.gridded = True
         self.gridres = { # Mutually exclusive with the "geometry" key
             'units': 'degrees',
             'x': 1.0, # Grid cell resolution in the x direction
@@ -218,7 +220,6 @@ class SpatioTemporalMatrix(TransformationInterface):
         self.__metadata__ = {
             'dates': map(lambda t: t.strftime(ISO_8601),
                 [dates[0], dates[-1]]),
-            'gridded': True,
             'bbox': bounds,
             'bboxmd5': md5(str(bounds)).hexdigest()
         }
@@ -294,13 +295,20 @@ class XCO2Matrix(TransformationInterface):
             'value': '%.2f',
             'error': '%.4f'
         }
+        self.gridded = False
         self.geometry = {
-            'is_collection': False,
+            'collection': False,
             'type': 'Point'
         }
         self.header = ['lng', 'lat', 'xco2_ppm', 'day', 'year', 'error_ppm']
-        self.steps = [86400] # 1 day (daily) in seconds
+        self.spans = [518400] # 6 days in seconds
         self.parameters = ['value', 'error']
+        self.regex = {
+            'regex': '^XCO2_(?P<timestamp>\d{4}\d{2}\d{2})_.*$',
+            'map': {
+                'timestamp': '%Y%m%d'
+            }
+        }
         self.units = {
             'x': 'degrees',
             'y': 'degrees',
@@ -311,8 +319,21 @@ class XCO2Matrix(TransformationInterface):
 
         super(XCO2Matrix, self).__init__(path, *args, **kwargs)
 
-    def dump(self, data):
-        pass
+    def describe(self, df=None, **kwargs):
+        if df is None:
+            df = self.extract(**kwargs)
+
+        bounds = MultiPoint(df.set_index(['x', 'y']).index.tolist()).bounds
+
+        self.__metadata__ = {
+            'dates': [self.timestamp],
+            'bbox': bounds,
+            'bboxmd5': md5(str(bounds)).hexdigest()
+        }
+
+        super(XCO2Matrix, self).describe(df, **kwargs)
+
+        return self.__metadata__
 
     def extract(self, *args, **kwargs):
         '''Creates a DataFrame properly encapsulating the associated file data'''
@@ -366,6 +387,7 @@ class KrigedXCO2Matrix(TransformationInterface):
             'values': '%.2f',
             'errors': '%.4f'
         }
+        self.gridded = True
         self.gridres = {
             'x': 1.0,
             'y': 1.0,
@@ -398,11 +420,10 @@ class KrigedXCO2Matrix(TransformationInterface):
         if df is None:
             df = self.extract(**kwargs)
 
-        bounds = MultiPoint([i for i in df.apply(lambda c: [c['x'], c['y']], 1)]).bounds
+        bounds = MultiPoint(df.set_index(['x', 'y']).index.tolist()).bounds
 
         self.__metadata__ = {
             'dates': [self.timestamp],
-            'gridded': True,
             'bbox': bounds,
             'bboxmd5': md5(str(bounds)).hexdigest()
         }

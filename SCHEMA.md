@@ -89,19 +89,24 @@ the data model (TransformationInterface) is compatible.
 
     "geometry": {               // Implies data are not on a structured grid
 
-        // Specifies that each document is a FeatureCollection and stored as
-        // one document; otherwise, each row is stored as a separate document
-        // (a separate simple feature)
-        "is_collection": Boolean,
-
-        "type": ("Point"|"LineString"|"Polygon")
+        // Also specifies whether each document is a FeatureCollection and stored
+        //  as one document (for collections i.e. "Multi-" types and FeatureCollection
+        //  type; otherwise, each row is stored as a separate document
+        //  (a separate simple feature)
+        "type": ("Point"|"LineString"|"Polygon"|"MultiPoint"|"MultiLineString"|"MultiPolygon"|"FeatureCollection")
 
     },
 
-    "gridres": {
-    	"units": String			// Grid cell units 
-    	"x": Number				// Grid cell resolution in the x direction
-    	"y": Number				// Grid cell resolution in the y direction
+    "gridded": Boolean,         // Indicates the data are on a grid
+
+    "gridres": {                // Grid resolution, if data are gridded
+
+        "units": ("degrees"|"meters"),
+
+        "x": Number,            // Grid resolution in the x-direction
+
+        "y": Number             // Grid resolution in the y-direction
+
     },
 
     "header": [String],         // Array of human-readable column headers, in order

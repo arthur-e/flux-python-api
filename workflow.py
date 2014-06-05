@@ -5,6 +5,24 @@ from fluxpy.models import *
 from fluxpy.mediators import *
 from fluxpy.utils import Suite
 
+class StanfordXCO2(Suite):
+    '''
+    '''
+    collection_name = 'test'
+    file_matcher = re.compile(r'^XCO2_.*\.mat$')
+    model = XCO2Matrix
+    path = '/net/nas3/data/gis_lab/project/NASA_ACOS_Visualization/Data/xco2/'
+
+    def __init__(self):
+        self.mediator = Unstructured3DMediator()
+
+    def main(self):
+        paths = self.get_listing()[0:3]
+        for path in paths:
+            instance = self.model(path)
+            self.mediator.save(self.collection_name, instance)
+
+
 class StanfordKrigedXCO2(Suite):
     '''
     latitude    longitude   value   error   ...
