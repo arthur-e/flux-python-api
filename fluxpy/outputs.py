@@ -108,11 +108,11 @@ class AbstractGridView:
 
     def __square_bounds__(self, coords, altitude=None):
         # For this gridded product, assume square cells; get grid cell resolution
-        gridres = self.model.gridres.get('x')
+        grid = self.model.grid.get('x')
 
         # Get the rectangular bounds of the model cell at the grid resolution
         if not any(map(lambda x: np.isnan(x), coords)):
-            bounds = map(str, Point(coords).buffer(gridres, 4).bounds)
+            bounds = map(str, Point(coords).buffer(grid, 4).bounds)
 
         else:
             return None # Skip NaNs

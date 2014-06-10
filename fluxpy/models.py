@@ -109,7 +109,7 @@ class TransformationInterface(object):
 
         self.__metadata__.update({
             'gridded': getattr(self, 'gridded', True),
-            'gridres': getattr(self, 'gridres', {}),
+            'grid': getattr(self, 'grid', {}),
             'title': getattr(self, 'title', ''),
             'units': getattr(self, 'units', {})
         })
@@ -136,7 +136,7 @@ class CovarianceMatrix(TransformationInterface):
     '''
     def __init__(self, path, *args, **kwargs):
         self.precision = 5 
-        self.gridres = {
+        self.grid = {
             'units': 'degrees',
             'x': 1.0,
             'y': 1.0,
@@ -194,7 +194,7 @@ class SpatioTemporalMatrix(TransformationInterface):
             'y': '%.5f'
         }
         self.gridded = True
-        self.gridres = { # Mutually exclusive with the "geometry" key
+        self.grid = { # Mutually exclusive with the "geometry" key
             'units': 'degrees',
             'x': 1.0, # Grid cell resolution in the x direction
             'y': 1.0, # Grid cell resolution in the y direction
@@ -388,7 +388,7 @@ class KrigedXCO2Matrix(TransformationInterface):
             'errors': '%.4f'
         }
         self.gridded = True
-        self.gridres = {
+        self.grid = {
             'x': 1.0,
             'y': 1.0,
             'units': 'degrees'

@@ -107,7 +107,7 @@ class TestSpatioTemporalMatrixes(unittest.TestCase):
         self.assertEqual(df['bboxmd5'], '51d5738489b4ae4fa8623f867de527ce')
         self.assertEqual(df['dates'], ['2004-06-30T00:00:00', '2004-06-30T21:00:00'])
         self.assertEqual(df['gridded'], True)
-        self.assertEqual(df['gridres'], {'units': 'degrees', 'x': 1.0, 'y': 1.0})
+        self.assertEqual(df['grid'], {'units': 'degrees', 'x': 1.0, 'y': 1.0})
         self.assertEqual(df['steps'], [10800])
     
     def test_model_extract(self):
