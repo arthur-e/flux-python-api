@@ -101,21 +101,36 @@ sudo python setup.py install
 </div>
 <div class="section" id="loading-data">
 <h1><strong>Loading data</strong><a class="headerlink" href="#loading-data" title="Permalink to this headline">¶</a></h1>
-<p>Use the <strong>load.py</strong> utility to load flux data from files that are in Matlab (<em>*.mat</em>) or HDF5 (<em>*.h5</em> or <em>*.mat</em>) format. A description of the required configuration file and examples are provided in the next sections.</p>
-<p>Usage:</p>
-<div class="highlight-python"><div class="highlight"><pre>load.py -i &lt;inputfile&gt; [OPTIONAL ARGUMENTS]
+<p>Use the <strong>manage.py load</strong> utility to load flux data from files that are in Matlab (<em>*.mat</em>) or HDF5 (<em>*.h5</em> or <em>*.mat</em>) format. A description of the required configuration file and examples are provided in the next sections.</p>
+<p>Loading with <strong>manage.py load</strong>:</p>
+<div class="highlight-python"><div class="highlight"><pre>Usage:
+    manage.py load -p &lt;filepath&gt; -m &lt;model&gt; -n &lt;collection_name&gt; [OPTIONAL ARGS]
 
 Required argument:
-    -i, --ifile          Input file in Matlab (*.mat) or HDF5 (*.h5 or *.mat) format
+
+    -p, --path               Directory path of input file in Matlab (*.mat)
+                             or HDF5 (*.h5 or *.mat) format
+
+    -n, --collection_name    Collection name for the input file (MongoDB
+                             identifier)
+
+    -m, --model              fluxpy/models.py model associated with the
+                             input dataset
 
 Optional arguments:
-    -c, --config_file    Specify location of json config file. By default, uses
-                         input file w/ .json extension.
+
+    -c, --config_file        Specify location of json config file. By
+                             default, seeks input file w/ .json extension.
 
 These optional args can be used to override specifications of the config file:
-    -n, --var_name       The name of the variable in the hierarchical file
-                         that stores the data
-    -t, --timestamp      An ISO 8601 timestamp for the first observation
+
+    -v, --var_name           The name of the variable in the hierarchical
+                             file that stores the data
+
+    -t, --timestamp          An ISO 8601 timestamp for the first observation
+
+    -T, --title              &quot;Pretty&quot; name, for displaying within
+                             visualization application
 </pre></div>
 </div>
 <div class="section" id="the-configuration-file">
@@ -147,7 +162,7 @@ By default, the utility will look for a <em>*.json</em> file with the same name 
 
 &quot;title&quot;: String,            // Human-readable &quot;pretty&quot; name for the data set
 
-&quot;units&quot;: [String],          // Array of units for each field, in order
+&quot;units&quot;: Object,            // The measurement units, per parameter
 
 &quot;var_name&quot;: String          // The name of the variable in the hierarchical
                             // file which stores the data
@@ -157,34 +172,122 @@ By default, the utility will look for a <em>*.json</em> file with the same name 
 <div class="highlight-python"><div class="highlight"><pre><span class="p">{</span>
     <span class="s">&quot;columns&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;x&quot;</span><span class="p">,</span><span class="s">&quot;y&quot;</span><span class="p">],</span>
     <span class="s">&quot;gridres&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s">&quot;units&quot;</span><span class="p">:</span> <span class="s">&quot;degrees&quot;</span><span class="p">,</span>
-                <span class="s">&quot;x&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
-                <span class="s">&quot;y&quot;</span><span class="p">:</span> <span class="mf">1.0</span>
+        <span class="s">&quot;units&quot;</span><span class="p">:</span> <span class="s">&quot;degrees&quot;</span><span class="p">,</span>
+            <span class="s">&quot;x&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+            <span class="s">&quot;y&quot;</span><span class="p">:</span> <span class="mf">1.0</span>
         <span class="p">},</span>
-    <span class="s">&quot;header&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;lng&quot;</span><span class="p">,</span><span class="s">&quot;lat&quot;</span><span class="p">],</span>
-    <span class="s">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;value&quot;</span><span class="p">,</span><span class="s">&quot;error&quot;</span><span class="p">],</span>
-    <span class="s">&quot;span&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>
-    <span class="s">&quot;step&quot;</span><span class="p">:</span> <span class="mi">10800</span><span class="p">,</span>
+    <span class="s">&quot;header&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="s">&quot;lng&quot;</span><span class="p">,</span>
+        <span class="s">&quot;lat&quot;</span>
+    <span class="p">],</span>
+    <span class="s">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;values&quot;</span><span class="p">],</span>
+    <span class="s">&quot;steps&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mi">10800</span><span class="p">],</span>
     <span class="s">&quot;timestamp&quot;</span><span class="p">:</span> <span class="s">&quot;2012-12-22T03:00:00&quot;</span><span class="p">,</span>
     <span class="s">&quot;title&quot;</span><span class="p">:</span> <span class="s">&quot;Surface Carbon Flux&quot;</span><span class="p">,</span>
-    <span class="s">&quot;units&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;degrees&quot;</span><span class="p">,</span><span class="s">&quot;degrees&quot;</span><span class="p">],</span>
+    <span class="s">&quot;units&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">&quot;x&quot;</span><span class="p">:</span> <span class="s">&quot;degrees&quot;</span><span class="p">,</span>
+        <span class="s">&quot;y&quot;</span><span class="p">:</span> <span class="s">&quot;degrees&quot;</span><span class="p">,</span>
+        <span class="s">&quot;values&quot;</span><span class="p">:</span> <span class="s">&quot;&amp;mu;mol/m&amp;sup2;&quot;</span>
+    <span class="p">},</span>
     <span class="s">&quot;var_name&quot;</span><span class="p">:</span> <span class="s">&quot;casa_gfed_2004&quot;</span>
 <span class="p">}</span>
 </pre></div>
 </div>
 </div>
-<div class="section" id="example-usage-of-load-py">
-<h2>Example usage of <strong>load.py</strong><a class="headerlink" href="#example-usage-of-load-py" title="Permalink to this headline">¶</a></h2>
-<p>Most basic example; assumes a configuration file exists at <em>~/mydata/data_casa_gfed_3hrly.json</em>):</p>
-<div class="highlight-python"><div class="highlight"><pre>load.py -i ~/mydata/data_casa_gfed_3hrly.mat
+<div class="section" id="manage-py-load-examples">
+<h2><strong>manage.py load</strong> examples<a class="headerlink" href="#manage-py-load-examples" title="Permalink to this headline">¶</a></h2>
+<p>Most basic example; assumes a configuration file exists at <em>~/mydata/data_casa_gfed_3hrly.json</em>:</p>
+<div class="highlight-python"><div class="highlight"><pre>$ python manage.py load -p ~/data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004
 </pre></div>
 </div>
-<p>Using command line arguments to override configuration file parameters <em>var_name</em> and <em>timestamp</em>:</p>
-<div class="highlight-python"><div class="highlight"><pre>load.py -i ~/mydata/data_casa_gfed_3hrly.mat -t 2003-12-22T03:00:00 -n casa_gfed_2004
+<p>Specify an alternate config file to use:</p>
+<div class="highlight-python"><div class="highlight"><pre>$ python manage.py load -p ~/data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004 -c ~/config/casa_gfed.json
 </pre></div>
 </div>
-<p>Specifying a configuration file at a non-default location:</p>
-<div class="highlight-python"><div class="highlight"><pre>load.py -i ~/mydata/data_casa_gfed_3hrly.mat -c -i ~/mydata/my_config_file.json
+<p>In the following example, the program will look for a config file at ~/data_casa_gfed.json and overwrite the timestamp and var_name specifications in that file with those provided as command line args:</p>
+<div class="highlight-python"><div class="highlight"><pre>$ python manage.py load -p ~/data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004 -t 2003-12-22T03:00:00 -v casa_gfed_2004
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="removing-data">
+<h1><strong>Removing data</strong><a class="headerlink" href="#removing-data" title="Permalink to this headline">¶</a></h1>
+<p>Use the <strong>manage.py remove</strong> utility to remove data collections from the database:</p>
+<div class="highlight-python"><div class="highlight"><pre>$ manage.py remove -n &lt;collection_name&gt;
+
+Required argument:
+    -n, --collection_name    Collection name to be removed (MongoDB identifier)
+</pre></div>
+</div>
+<div class="section" id="manage-py-remove-example">
+<h2><strong>manage.py remove</strong> example<a class="headerlink" href="#manage-py-remove-example" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-python"><div class="highlight"><pre>$ python manage.py remove -n casa_gfed_2004
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="renaming-collections">
+<h1><strong>Renaming collections</strong><a class="headerlink" href="#renaming-collections" title="Permalink to this headline">¶</a></h1>
+<p>Use the <strong>manage.py rename</strong> utility to rename data collections in the database:</p>
+<div class="highlight-python"><div class="highlight"><pre>$ manage.py rename -n &lt;collection_name&gt; -r &lt;new_name&gt;
+
+Required arguments:
+    -n, --collection_name    Collection name to be removed (MongoDB identifier)
+    -r, --new_name           New name for the collection
+</pre></div>
+</div>
+<div class="section" id="manage-py-rename-example">
+<h2><strong>manage.py rename</strong> example<a class="headerlink" href="#manage-py-rename-example" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-python"><div class="highlight"><pre>$ python manage.py rename -n casa_gfed_2004 -r casa_2004
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="database-diagnostics">
+<h1><strong>Database diagnostics</strong><a class="headerlink" href="#database-diagnostics" title="Permalink to this headline">¶</a></h1>
+<p>Use the <strong>manage.py db</strong> utility to get diagnostic information on database contents:</p>
+<div class="highlight-python"><div class="highlight"><pre>$ manage.py db [OPTIONAL ARGUMENTS]
+
+Requires one of the following flags:
+
+    -l, --list_ids           Lists collection names in the database.
+
+         Optional args with -l flag:
+             collections :   lists collections
+             metadata:       lists the collections w/ metadata entries
+             coord_index:    lists the collections w/ coord_index entries
+
+    -n, --collection_name    Collection name for which to shows metadata
+
+    -a, --audit              No argument required. Performs audit of the
+                             database, reporting any collections that are
+                             missing corresponding metadata/coord_index
+                             entries and any stale metadata/coord_index
+                             entries without corresponding collections
+
+Optional argument:
+
+    -x, --include_counts     Include count of records within each listed
+                             collection. Valid only with a corresponding
+                             &quot;-l collections&quot; flag; ignored otherwise
+</pre></div>
+</div>
+<div class="section" id="manage-py-db-examples">
+<h2><strong>manage.py db</strong> examples<a class="headerlink" href="#manage-py-db-examples" title="Permalink to this headline">¶</a></h2>
+<p>List all collections and their number of records:</p>
+<div class="highlight-python"><div class="highlight"><pre>$ python manage.py db -l collections -x
+</pre></div>
+</div>
+<p>List all the collections with metadata entries:</p>
+<div class="highlight-python"><div class="highlight"><pre>$ python manage.py db -l metadata
+</pre></div>
+</div>
+<p>Show metadata for the collection with id &#8220;casa_gfed_2004&#8221;:</p>
+<div class="highlight-python"><div class="highlight"><pre>$ python manage.py db -n casa_gfed_2004
+</pre></div>
+</div>
+<p>Audit the database:</p>
+<div class="highlight-python"><div class="highlight"><pre>$ python manage.py db -a
 </pre></div>
 </div>
 </div>
@@ -206,7 +309,19 @@ By default, the utility will look for a <em>*.json</em> file with the same name 
 </li>
 <li><a class="reference internal" href="#loading-data"><strong>Loading data</strong></a><ul>
 <li><a class="reference internal" href="#the-configuration-file">The configuration file</a></li>
-<li><a class="reference internal" href="#example-usage-of-load-py">Example usage of <strong>load.py</strong></a></li>
+<li><a class="reference internal" href="#manage-py-load-examples"><strong>manage.py load</strong> examples</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#removing-data"><strong>Removing data</strong></a><ul>
+<li><a class="reference internal" href="#manage-py-remove-example"><strong>manage.py remove</strong> example</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#renaming-collections"><strong>Renaming collections</strong></a><ul>
+<li><a class="reference internal" href="#manage-py-rename-example"><strong>manage.py rename</strong> example</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#database-diagnostics"><strong>Database diagnostics</strong></a><ul>
+<li><a class="reference internal" href="#manage-py-db-examples"><strong>manage.py db</strong> examples</a></li>
 </ul>
 </li>
 </ul>

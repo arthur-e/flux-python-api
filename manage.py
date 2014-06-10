@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import sys, getopt, copy, pprint
+import sys, getopt, copy, pprint, traceback
 from pymongo import MongoClient
 from fluxpy import models
 from fluxpy.mediators import *
@@ -14,6 +14,8 @@ Commands:
     load                Loads data
     
     remove              Removes data
+    
+    rename              Renames data collections
     
     db                  Database diagnostic tools, incl. listing all
                         collections, viewing collection metadata, etc.
@@ -76,6 +78,20 @@ manage.py remove
         python manage.py remove -n casa_gfed_2004
 """
 
+usage_rename = """
+manage.py rename
+
+    Usage:
+        manage.py rename -n <collection_name> -r <new_name>
+        
+    Required arguments:
+        -n, --collection_name    Collection name to be removed (MongoDB identifier)
+        -r, --new_name           New name for the collection       
+    
+    Example:
+        python manage.py rename -n casa_gfed_2004 -r casa_2004
+"""
+
 usage_db = """
 manage.py db
 
@@ -120,7 +136,7 @@ manage.py db
             python manage.py db -a
 """
 
-usage_all = ('\n' + '-'*30).join([usage_hdr,usage_load,usage_remove,usage_db])
+usage_all = ('\n' + '-'*30).join([usage_hdr,usage_load,usage_remove,usage_rename,usage_db])
 
 # map of valid options (and whether or not they are required) for each command
 # -one current naivete: this setup assumes all boolean options are not required, which just happens to be the case (for now)
@@ -133,6 +149,9 @@ commands = {
                   'config_file': False},
             
         'remove': {'collection_name': True},
+        
+        'rename': {'collection_name': True,
+                   'new_name': True},
         
         'db': {'list_ids': False,
                'collection_name': False,
@@ -148,6 +167,7 @@ options = {'help': 'h',
            'model': 'm:',
            'var_name': 'v:',
            'collection_name': 'n:',
+           'new_name': 'r:',
            'config_file': 'c:',
            'include_counts': 'x',
            'list_ids': 'l:',
@@ -254,6 +274,44 @@ def _remove(collection_name):
               'Existing collections include:'.format(collection_name)
         _db(list_ids='collections')
 
+def _rename(collection_name,new_name):
+    """
+    Renames specified collection with the specified new name.
+    """
+    print '\nRenaming collection ID "{0}" to "{1}"...'.format(collection_name,new_name)
+    
+    db = _open_db_connection()
+    db[collection_name].rename(new_name)
+    
+    # update the metadata and coord_index collections
+    for col in ['metadata','coord_index']:
+        # this is messy b/c '_id' field cannot be renamed w/in the database
+        # ...further, inserting a copy with an altered name fails bc the _id's
+        #    index cannot be changed
+        # ...further, we don't want to remove the entry and THEN reindex in
+        #    case something fails bc the data will not be able to be recovered
+        # ...so, we have to first store a copy of the collection in the db as
+        #    it exists before we do anything, then do the stuff.
+        
+        # first create a temporary backup of the collection in case something fails
+        orig_name = col + '_orig'
+        for x in db[col].find(): db[orig_name].insert(x)
+        try:
+            document = db[col].find_one({'_id': collection_name})
+            document['_id'] = new_name
+            db[col].remove({'_id': collection_name})
+            db[col].insert(document)
+
+        except:
+            print 'Rename FAILED; restoring "{0}" table'.format(col)
+            db[col].drop()
+            for x in db[orig_name].find(): db[col].insert(x)
+            traceback.print_exc()
+            
+        db[orig_name].drop()
+        
+    print 'Complete.\n'
+
 def _db(list_ids=None,collection_name=None,audit=None,include_counts=False):
     """
     Sub-parser for the db command- checks valid args and calls
@@ -342,7 +400,7 @@ def _audit():
                 print 'INCONSISTENCY FOUND: stale entry for collection ID "{0}" in {1}'.format(m,x)
                 all_good = False
                 
-    print '\nDatabase auditing complete.\n',
+    print '\nDatabase audit complete.\n',
     if all_good: print 'No inconsistencies found!'
     
 
