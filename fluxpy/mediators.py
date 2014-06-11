@@ -8,7 +8,6 @@ xco2 = KrigedXCO2Matrix('xco2_data.mat', timestamp='2009-06-15')
 mediator.add(xco2).save_to_db('my_xco2_data')
 '''
 
-import ipdb#FIXME
 import datetime
 import os
 import re
@@ -154,6 +153,43 @@ class Mediator(object):
         '''Transforms contents of Data Frame into JSON representation for MongoDB'''
         if collection_name in RESERVED_COLLECTION_NAMES:
             raise ValueError('The collection name provided is a reserved name')
+
+    def summarize(self, collection_name, query={}):
+        '''Generates summary statistics over the collection.'''
+        dfs = self.load(collection_name, query)
+        values = dict()
+
+        if type(dfs) == dict:
+            for df in dfs.values():
+                for param in df.keys().values:
+                    if param in ('x', 'y', 'timestamp'):
+                        continue
+
+                    if not values.has_key(param):
+                        values[param] = pd.Series([])
+
+                    values[param] = pd.concat([
+                        values[param], df[param]
+                    ], axis=0)
+
+        elif type(dfs) == pd.DataFrame:
+            for param in dfs.keys().values:
+                if param in ('x', 'y', 'timestamp'):
+                    continue
+
+                values[param] = dfs[param]
+
+        summary = dict()
+        for param in values.keys():
+            summary[param] = {
+                'mean': values[param].mean(),
+                'min': values[param].min(),
+                'max': values[param].max(),
+                'std': values[param].std(),
+                'median': values[param].median()
+            }
+
+        return summary
 
 
 class Grid4DMediator(Mediator):
@@ -357,22 +393,6 @@ class Grid3DMediator(Mediator):
         self.client[self.db_name][collection_name].insert(data_dict)
         self.generate_metadata(collection_name, instance)
 
-    def summarize(self, collection_name, query={}):
-        df = self.load(collection_name, query).values()[0]
-
-        summary = dict()
-        for param in ('values', 'errors'):
-            if param in df.keys().values:
-                summary[param] = {
-                    'mean': df[param].mean(),
-                    'min': df[param].min(),
-                    'max': df[param].max(),
-                    'std': df[param].std(),
-                    'median': df[param].median()
-                }
-
-        return summary
-        
 
 class Unstructured3DMediator(Mediator):
     '''
@@ -447,22 +467,6 @@ class Unstructured3DMediator(Mediator):
                     sys.stderr.write('\rInserted %d of %d records...' % (i + 1, total_records))
 
         self.generate_metadata(collection_name, instance)
-
-    def summarize(self, collection_name, query={}):
-        df = self.load(collection_name, query)
-
-        summary = dict()
-        for param in df.keys().values:
-            if param != 'timestamp':
-                summary[param] = {
-                    'mean': df[param].mean(),
-                    'min': df[param].min(),
-                    'max': df[param].max(),
-                    'std': df[param].std(),
-                    'median': df[param].median()
-                }
-
-        return summary
 
 
 
