@@ -17,7 +17,7 @@ Last updated: May 23, 2014.
 
     "gridded": Boolean,         // Indicates the data are on a grid
 
-    "gridres": {                // Grid resolution, if data are gridded
+    "grid": {                   // Grid resolution, if data are gridded
 
         "units": ("degrees"|"meters"),
 
@@ -99,7 +99,7 @@ the data model (TransformationInterface) is compatible.
 
     "gridded": Boolean,         // Indicates the data are on a grid
 
-    "gridres": {                // Grid resolution, if data are gridded
+    "grid": {                   // Grid resolution, if data are gridded
 
         "units": ("degrees"|"meters"),
 

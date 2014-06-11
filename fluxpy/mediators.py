@@ -8,6 +8,7 @@ xco2 = KrigedXCO2Matrix('xco2_data.mat', timestamp='2009-06-15')
 mediator.add(xco2).save_to_db('my_xco2_data')
 '''
 
+import ipdb#FIXME
 import datetime
 import os
 import re
@@ -379,6 +380,33 @@ class Unstructured3DMediator(Mediator):
     positions given as longitude-latitude pairs; two spatial dimensions, one
     value dimension (3D).
     '''
+
+    def load(self, collection_name, query={}):
+        # Retrieve a cursor to iterate over the records matching the query
+        result = self.client[self.db_name][collection_name].aggregate([{
+            '$match': query,
+        }, {
+            '$group': {
+                '_id': 0,
+                'timestamp': { '$push': '$timestamp' },
+                'value': { '$push': '$properties.value' },
+                'error': { '$push': '$properties.error' }
+            }
+        }, {
+            '$project': {
+                '_id': 0,
+                'timestamp': 1,
+                'value': 1,
+                'error': 1
+            }
+        }])
+
+        series = []
+        aggregate = result['result'][0]
+        for param in aggregate.keys():
+            series.append(pd.Series(aggregate[param], name=param))
+
+        return pd.concat(series, axis=1)
     
     def save(self, collection_name, instance, verbose=False):
         super(Unstructured3DMediator, self).save(collection_name, instance)
@@ -417,5 +445,24 @@ class Unstructured3DMediator(Mediator):
                 j = self.client[self.db_name][collection_name].insert(feature)
                 if verbose:
                     sys.stderr.write('\rInserted %d of %d records...' % (i + 1, total_records))
+
+        self.generate_metadata(collection_name, instance)
+
+    def summarize(self, collection_name, query={}):
+        df = self.load(collection_name, query)
+
+        summary = dict()
+        for param in df.keys().values:
+            if param != 'timestamp':
+                summary[param] = {
+                    'mean': df[param].mean(),
+                    'min': df[param].min(),
+                    'max': df[param].max(),
+                    'std': df[param].std(),
+                    'median': df[param].median()
+                }
+
+        return summary
+
 
 

@@ -316,6 +316,7 @@ class XCO2Matrix(TransformationInterface):
             'error': 'ppm&sup2;'
         }
         self.var_name = 'XCO2'
+        self.title = 'Bias-Corrected XCO2 Retrievals'
 
         super(XCO2Matrix, self).__init__(path, *args, **kwargs)
 

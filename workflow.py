@@ -85,6 +85,11 @@ if __name__ == '__main__':
         path = '/ws4/idata/fluxvis/casa_gfed_inversion_results/1.zerofull_casa_1pm_10twr/Month_Uncert1.mat'
         inst = CovarianceMatrix(path, timestamp='2008-01', span='1M')
 
+    elif sys.argv[1] == 'xco2':
+        path = '/net/nas3/data/gis_lab/project/NASA_ACOS_Visualization/Data/xco2/XCO2_20090615_20090620.mat'
+        inst = XCO2Matrix(path)
+        mediator = Unstructured3DMediator().save('r2_xco2', inst)
+
     elif sys.argv[1] == 'kriged_xco2':
         path = '/net/nas3/data/gis_lab/project/NASA_ACOS_Visualization/Data/xco2/Kriged_20090615_20090620.mat'
         inst = KrigedXCO2Matrix(path)
