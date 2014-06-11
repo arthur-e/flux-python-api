@@ -155,14 +155,20 @@ class Mediator(object):
             raise ValueError('The collection name provided is a reserved name')
 
     def summarize(self, collection_name, query={}):
-        '''Generates summary statistics over the collection.'''
+        '''
+        Generates summary statistics by parameter over the data in a collection.
+        This was designed and tested for the "3D" case i.e. spatial data in a
+        tabular form and NOT for the "4D" case i.e. spatiotemporal data in a
+        matrix form.
+        '''
+        disallowed_params = ('x', 'y', 'timestamp')
         dfs = self.load(collection_name, query)
         values = dict()
 
         if type(dfs) == dict:
             for df in dfs.values():
                 for param in df.keys().values:
-                    if param in ('x', 'y', 'timestamp'):
+                    if param in disallowed_params:
                         continue
 
                     if not values.has_key(param):
@@ -173,14 +179,13 @@ class Mediator(object):
                     ], axis=0)
 
         elif type(dfs) == pd.DataFrame:
-            for param in dfs.keys().values:
-                if param in ('x', 'y', 'timestamp'):
-                    continue
-
-                values[param] = dfs[param]
+            values = dfs
 
         summary = dict()
         for param in values.keys():
+            if param in disallowed_params:
+                continue
+
             summary[param] = {
                 'mean': values[param].mean(),
                 'min': values[param].min(),
