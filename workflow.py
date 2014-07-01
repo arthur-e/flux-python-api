@@ -17,7 +17,7 @@ class StanfordXCO2(Suite):
         self.mediator = Unstructured3DMediator()
 
     def main(self):
-        paths = self.get_listing()[0:3]
+        paths = self.get_listing()[0:10]
         for path in paths:
             instance = self.model(path)
             self.mediator.save(self.collection_name, instance)

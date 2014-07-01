@@ -325,9 +325,11 @@ class XCO2Matrix(TransformationInterface):
             df = self.extract(**kwargs)
 
         bounds = MultiPoint(df.set_index(['x', 'y']).index.tolist()).bounds
+        dates = df['timestamp'].map(lambda x: x.strftime('%Y-%m-%dT%H:%M:%S')).unique()
+        dates.sort()
 
         self.__metadata__ = {
-            'dates': [self.timestamp],
+            'dates': dates.tolist(),
             'bbox': bounds,
             'bboxmd5': md5(str(bounds)).hexdigest()
         }
