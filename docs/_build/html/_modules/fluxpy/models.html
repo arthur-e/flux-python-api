@@ -1,0 +1,563 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>fluxpy.models &mdash; flux-python-api 0.01 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.01',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="flux-python-api 0.01 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">flux-python-api 0.01 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for fluxpy.models</h1><div class="highlight"><pre>
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">Data models for various science model outputs, including models that map from</span>
+<span class="sd">flat files and hierarchical files (e.g. HDF5) to Python pandas Data Frames.</span>
+<span class="sd">&#39;&#39;&#39;</span>
+
+<span class="kn">import</span> <span class="nn">datetime</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="kn">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">scipy.io</span>
+<span class="kn">import</span> <span class="nn">h5py</span>
+<span class="kn">from</span> <span class="nn">dateutil.relativedelta</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">fluxpy</span> <span class="kn">import</span> <span class="n">ISO_8601</span>
+<span class="kn">from</span> <span class="nn">shapely.geometry</span> <span class="kn">import</span> <span class="n">MultiPoint</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">hashlib</span> <span class="kn">import</span> <span class="n">md5</span>
+
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">md5</span>
+
+<div class="viewcode-block" id="TransformationInterface"><a class="viewcode-back" href="../../index.html#fluxpy.models.TransformationInterface">[docs]</a><span class="k">class</span> <span class="nc">TransformationInterface</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    An abstract persistence transformation interface (modified from</span>
+<span class="sd">    Andy Bulka, 2001), where extract() and dump() methods are defined in</span>
+<span class="sd">    subclasses. The extract() method may take unique arguments as optional keyword</span>
+<span class="sd">    arguments (they must default to None). The dump() method must take only one</span>
+<span class="sd">    argument which is the interchange datum (a dictionary). A configuration</span>
+<span class="sd">    file may be provided as a *.json* file with the same name as the data file.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">path_regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;.+\.(?P&lt;extension&gt;mat|h5)&#39;</span><span class="p">)</span>
+    <span class="n">var_regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;^(?!__).*(?!__)$&#39;</span><span class="p">)</span> <span class="c"># Skips __private__ variable names</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">config_file</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_regex</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&#39;Only Matlab (*.mat) and HDF5 (*.h5 or *.mat) files are accepted&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_regex</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">groupdict</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;extension&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s">&#39;mat&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">file_handler</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">loadmat</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">file_handler</span> <span class="o">=</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span>
+
+        <span class="c"># If config_file not specified, check to see if a config file with the same name exists</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">config_file</span> <span class="k">if</span> <span class="n">config_file</span> <span class="k">else</span> <span class="s">&#39;.&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;.&#39;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">+</span> <span class="s">&#39;.json&#39;</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">config</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s">&#39;rb&#39;</span><span class="p">))</span>
+
+        <span class="c"># If the filename can be parsed for information, mine the timestamp from it</span>
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;regex&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">regex</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;map&#39;</span><span class="p">):</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">regex</span><span class="p">[</span><span class="s">&#39;map&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;timestamp&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;timestamp&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                    <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">regex</span><span class="p">[</span><span class="s">&#39;regex&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
+                    <span class="k">if</span> <span class="n">match</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                        <span class="n">fmt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">regex</span><span class="p">[</span><span class="s">&#39;map&#39;</span><span class="p">][</span><span class="s">&#39;timestamp&#39;</span><span class="p">]</span>
+                        <span class="n">t</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">groupdict</span><span class="p">()[</span><span class="s">&#39;timestamp&#39;</span><span class="p">]</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">fmt</span><span class="p">)</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="n">ISO_8601</span><span class="p">)</span>
+
+        <span class="c"># Update and apply the configuration options as attributes</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__configure__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="c"># Open the hierarchical file</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__open__</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+            
+    <span class="k">def</span> <span class="nf">__configure__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="c"># Set as attributes all of the configuration values</span>
+        <span class="k">for</span> <span class="n">config</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">__date_series__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">steps</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">df</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">steps</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+        <span class="n">dates</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">date_range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">,</span> <span class="n">periods</span><span class="o">=</span><span class="n">steps</span><span class="p">,</span>
+            <span class="n">freq</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%d</span><span class="s">S&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">steps</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="k">while</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">steps</span><span class="p">):</span>
+                <span class="n">dates</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">dates</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">date_range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">,</span>
+                    <span class="n">periods</span><span class="o">=</span><span class="n">steps</span><span class="p">,</span> <span class="n">freq</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%d</span><span class="s">S&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+                <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">return</span> <span class="n">dates</span>
+
+    <span class="k">def</span> <span class="nf">__open__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">var_name</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_handler</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="c"># HDF5/Matlab file interface</span>
+
+        <span class="k">except</span> <span class="ne">NotImplementedError</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">file_handler</span> <span class="o">=</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_handler</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+
+        <span class="c"># Infer var_name; grab the first variable name that isn&#39;t __private__</span>
+        <span class="k">if</span> <span class="n">var_name</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;var_name&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">var_name</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">k</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">file</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">var_regex</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span>
+            <span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">describe</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;__metadata__&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__metadata__</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">__metadata__</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
+            <span class="s">&#39;gridded&#39;</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;gridded&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">),</span>
+            <span class="s">&#39;grid&#39;</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;grid&#39;</span><span class="p">,</span> <span class="p">{}),</span>
+            <span class="s">&#39;title&#39;</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;title&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">),</span>
+            <span class="s">&#39;units&#39;</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;units&#39;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="p">})</span>
+
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;spans&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__metadata__</span><span class="p">[</span><span class="s">&#39;spans&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">spans</span>
+
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;steps&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__metadata__</span><span class="p">[</span><span class="s">&#39;steps&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">steps</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__metadata__</span>
+
+    <span class="k">def</span> <span class="nf">dump</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">extract</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+</div>
+<div class="viewcode-block" id="CovarianceMatrix"><a class="viewcode-back" href="../../index.html#fluxpy.models.CovarianceMatrix">[docs]</a><span class="k">class</span> <span class="nc">CovarianceMatrix</span><span class="p">(</span><span class="n">TransformationInterface</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Represents a covariance matrix from aggregate covariances; assumes monthly</span>
+<span class="sd">    aggregation (though this can be specified otherwise).</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">precision</span> <span class="o">=</span> <span class="mi">5</span> 
+        <span class="bp">self</span><span class="o">.</span><span class="n">grid</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;units&#39;</span><span class="p">:</span> <span class="s">&#39;degrees&#39;</span><span class="p">,</span>
+            <span class="s">&#39;x&#39;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+            <span class="s">&#39;y&#39;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;value&#39;</span><span class="p">,</span> <span class="s">&#39;error&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">units</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;x&#39;</span><span class="p">:</span> <span class="s">&#39;degrees&#39;</span><span class="p">,</span>
+            <span class="s">&#39;y&#39;</span><span class="p">:</span> <span class="s">&#39;degrees&#39;</span>
+        <span class="p">}</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">CovarianceMatrix</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">describe</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">df</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">extract</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">__metadata__</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;dates&#39;</span><span class="p">:</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">],</span>
+            <span class="s">&#39;gridded&#39;</span><span class="p">:</span> <span class="bp">True</span><span class="p">,</span>
+            <span class="s">&#39;precision&#39;</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;precision&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="p">}</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">CovarianceMatrix</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__metadata__</span>
+
+<div class="viewcode-block" id="CovarianceMatrix.extract"><a class="viewcode-back" href="../../index.html#fluxpy.models.CovarianceMatrix.extract">[docs]</a>    <span class="k">def</span> <span class="nf">extract</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Creates a DataFrame properly encapsulating the associated file data&#39;&#39;&#39;</span>
+
+        <span class="c"># Allow overrides through optional keyword arguments in extract()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__configure__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;timestamp&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&#39;One or more required configuration parameters were not provided&#39;</span><span class="p">)</span>
+
+        <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">var_name</span><span class="p">)[:])</span>
+        <span class="k">assert</span> <span class="n">df</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">df</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s">&#39;Expected a square matrix (covariance matrix)&#39;</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">precision</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">col</span><span class="p">:</span> <span class="n">col</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">((</span><span class="s">&#39;</span><span class="si">%%</span><span class="s">.</span><span class="si">%d</span><span class="s">f&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">precision</span><span class="p">)</span> <span class="o">%</span> <span class="n">x</span><span class="p">)))</span>
+
+        <span class="k">return</span> <span class="n">df</span>
+
+</div></div>
+<div class="viewcode-block" id="SpatioTemporalMatrix"><a class="viewcode-back" href="../../index.html#fluxpy.models.SpatioTemporalMatrix">[docs]</a><span class="k">class</span> <span class="nc">SpatioTemporalMatrix</span><span class="p">(</span><span class="n">TransformationInterface</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    A generic matrix with two spatial dimensions in the first two columns and</span>
+<span class="sd">    an arbitrary number of columns following each representing one step in time.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">config_file</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">precision</span> <span class="o">=</span> <span class="mi">2</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;x&#39;</span><span class="p">,</span> <span class="s">&#39;y&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">formats</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;x&#39;</span><span class="p">:</span> <span class="s">&#39;</span><span class="si">%.5f</span><span class="s">&#39;</span><span class="p">,</span>
+            <span class="s">&#39;y&#39;</span><span class="p">:</span> <span class="s">&#39;</span><span class="si">%.5f</span><span class="s">&#39;</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gridded</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">grid</span> <span class="o">=</span> <span class="p">{</span> <span class="c"># Mutually exclusive with the &quot;geometry&quot; key</span>
+            <span class="s">&#39;units&#39;</span><span class="p">:</span> <span class="s">&#39;degrees&#39;</span><span class="p">,</span>
+            <span class="s">&#39;x&#39;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span> <span class="c"># Grid cell resolution in the x direction</span>
+            <span class="s">&#39;y&#39;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span> <span class="c"># Grid cell resolution in the y direction</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">header</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;lng&#39;</span><span class="p">,</span> <span class="s">&#39;lat&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">steps</span> <span class="o">=</span> <span class="p">[</span><span class="mi">10800</span><span class="p">]</span> <span class="c"># 3 hours in seconds</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;values&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">units</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;x&#39;</span><span class="p">:</span> <span class="s">&#39;degrees&#39;</span><span class="p">,</span>
+            <span class="s">&#39;y&#39;</span><span class="p">:</span> <span class="s">&#39;degrees&#39;</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">transforms</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">SpatioTemporalMatrix</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">config_file</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">describe</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">df</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">extract</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="n">bounds</span> <span class="o">=</span> <span class="n">MultiPoint</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">values</span><span class="p">))</span><span class="o">.</span><span class="n">bounds</span>
+        <span class="n">dates</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__date_series__</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">__metadata__</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;dates&#39;</span><span class="p">:</span> <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="n">t</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="n">ISO_8601</span><span class="p">),</span>
+                <span class="p">[</span><span class="n">dates</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">dates</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]]),</span>
+            <span class="s">&#39;bbox&#39;</span><span class="p">:</span> <span class="n">bounds</span><span class="p">,</span>
+            <span class="s">&#39;bboxmd5&#39;</span><span class="p">:</span> <span class="n">md5</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">bounds</span><span class="p">))</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+        <span class="p">}</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">SpatioTemporalMatrix</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__metadata__</span>
+
+<div class="viewcode-block" id="SpatioTemporalMatrix.extract"><a class="viewcode-back" href="../../index.html#fluxpy.models.SpatioTemporalMatrix.extract">[docs]</a>    <span class="k">def</span> <span class="nf">extract</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Creates a DataFrame properly encapsulating the associated file data&#39;&#39;&#39;</span>
+
+        <span class="c"># Allow overrides through optional keyword arguments in extract()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__configure__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;timestamp&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&#39;One or more required configuration parameters were not provided&#39;</span><span class="p">)</span>
+
+        <span class="c"># Create the column headers as a time series</span>
+        <span class="n">steps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">file</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">var_name</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span>
+        <span class="n">cols</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span>
+
+        <span class="c"># Iterate through steps and concatenate the dates series; use as the</span>
+        <span class="c">#   column headers</span>
+        <span class="n">cols</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__date_series__</span><span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="n">steps</span><span class="p">))</span>
+
+        <span class="c"># Alternatively; for column names as strings:</span>
+        <span class="c"># dt = datetime.datetime.strptime(self.timestamp, &#39;%Y-%m-%dT%H:%M:%S&#39;)</span>
+        <span class="c"># cols.extend([</span>
+        <span class="c">#     datetime.datetime.strftime(dt + relativedelta(seconds=int(self.step*j)),</span>
+        <span class="c">#         &#39;%Y-%m-%dT%H:%M:%S&#39;) for j in range(steps)</span>
+        <span class="c"># ])</span>
+
+        <span class="c"># Data frame</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">var_name</span><span class="p">)[:],</span> <span class="n">columns</span><span class="o">=</span><span class="n">cols</span><span class="p">)</span>
+
+        <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Could not get at the variable named &quot;</span><span class="si">%s</span><span class="s">&quot;&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">var_name</span><span class="p">)</span>
+
+        <span class="c"># Apply any data transforms</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">transforms</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">col</span><span class="p">,</span> <span class="n">transform</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">transforms</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">transform</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                    <span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">transform</span><span class="p">)</span>
+
+        <span class="c"># Fix the precision of data values</span>
+        <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">formats</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">formats</span><span class="p">[</span><span class="n">col</span><span class="p">]</span> <span class="o">%</span> <span class="n">x</span><span class="p">))</span>
+
+        <span class="c"># Capture a new DataFrame with a MultiIndex; promotes these columns to indexes</span>
+        <span class="n">dfm</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">set_index</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span>
+
+        <span class="c"># Create metadata</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">dfm</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">dfm</span>
+
+</div></div>
+<div class="viewcode-block" id="XCO2Matrix"><a class="viewcode-back" href="../../index.html#fluxpy.models.XCO2Matrix">[docs]</a><span class="k">class</span> <span class="nc">XCO2Matrix</span><span class="p">(</span><span class="n">TransformationInterface</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Understands XCO2 data as formatted--Typically 6-day spans of XCO2</span>
+<span class="sd">    concentrations (ppm).</span>
+<span class="sd">    Matrix dimensions: 1,311 (observations) x 6 (attributes).</span>
+<span class="sd">    Columns: Longitude, latitude, XCO2 concentration (ppm), day of the year,</span>
+<span class="sd">    year, retrieval error (ppm).</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">precision</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;x&#39;</span><span class="p">,</span> <span class="s">&#39;y&#39;</span><span class="p">,</span> <span class="s">&#39;value&#39;</span><span class="p">,</span> <span class="s">&#39;%j&#39;</span><span class="p">,</span> <span class="s">&#39;%Y&#39;</span><span class="p">,</span> <span class="s">&#39;error&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">formats</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;x&#39;</span><span class="p">:</span> <span class="s">&#39;</span><span class="si">%.5f</span><span class="s">&#39;</span><span class="p">,</span>
+            <span class="s">&#39;y&#39;</span><span class="p">:</span> <span class="s">&#39;</span><span class="si">%.5f</span><span class="s">&#39;</span><span class="p">,</span>
+            <span class="s">&#39;value&#39;</span><span class="p">:</span> <span class="s">&#39;</span><span class="si">%.2f</span><span class="s">&#39;</span><span class="p">,</span>
+            <span class="s">&#39;error&#39;</span><span class="p">:</span> <span class="s">&#39;</span><span class="si">%.4f</span><span class="s">&#39;</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gridded</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">geometry</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;collection&#39;</span><span class="p">:</span> <span class="bp">False</span><span class="p">,</span>
+            <span class="s">&#39;type&#39;</span><span class="p">:</span> <span class="s">&#39;Point&#39;</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">header</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;lng&#39;</span><span class="p">,</span> <span class="s">&#39;lat&#39;</span><span class="p">,</span> <span class="s">&#39;xco2_ppm&#39;</span><span class="p">,</span> <span class="s">&#39;day&#39;</span><span class="p">,</span> <span class="s">&#39;year&#39;</span><span class="p">,</span> <span class="s">&#39;error_ppm&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">spans</span> <span class="o">=</span> <span class="p">[</span><span class="mi">518400</span><span class="p">]</span> <span class="c"># 6 days in seconds</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;value&#39;</span><span class="p">,</span> <span class="s">&#39;error&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">regex</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;regex&#39;</span><span class="p">:</span> <span class="s">&#39;^XCO2_(?P&lt;timestamp&gt;\d{4}\d{2}\d{2})_.*$&#39;</span><span class="p">,</span>
+            <span class="s">&#39;map&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s">&#39;timestamp&#39;</span><span class="p">:</span> <span class="s">&#39;%Y%m</span><span class="si">%d</span><span class="s">&#39;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">units</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;x&#39;</span><span class="p">:</span> <span class="s">&#39;degrees&#39;</span><span class="p">,</span>
+            <span class="s">&#39;y&#39;</span><span class="p">:</span> <span class="s">&#39;degrees&#39;</span><span class="p">,</span>
+            <span class="s">&#39;value&#39;</span><span class="p">:</span> <span class="s">&#39;ppm&#39;</span><span class="p">,</span>
+            <span class="s">&#39;error&#39;</span><span class="p">:</span> <span class="s">&#39;ppm&amp;sup2;&#39;</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">var_name</span> <span class="o">=</span> <span class="s">&#39;XCO2&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">title</span> <span class="o">=</span> <span class="s">&#39;Bias-Corrected XCO2 Retrievals&#39;</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">XCO2Matrix</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">describe</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">df</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">extract</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="n">bounds</span> <span class="o">=</span> <span class="n">MultiPoint</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">set_index</span><span class="p">([</span><span class="s">&#39;x&#39;</span><span class="p">,</span> <span class="s">&#39;y&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span><span class="o">.</span><span class="n">bounds</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">__metadata__</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;dates&#39;</span><span class="p">:</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">],</span>
+            <span class="s">&#39;bbox&#39;</span><span class="p">:</span> <span class="n">bounds</span><span class="p">,</span>
+            <span class="s">&#39;bboxmd5&#39;</span><span class="p">:</span> <span class="n">md5</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">bounds</span><span class="p">))</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+        <span class="p">}</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">XCO2Matrix</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__metadata__</span>
+
+<div class="viewcode-block" id="XCO2Matrix.extract"><a class="viewcode-back" href="../../index.html#fluxpy.models.XCO2Matrix.extract">[docs]</a>    <span class="k">def</span> <span class="nf">extract</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Creates a DataFrame properly encapsulating the associated file data&#39;&#39;&#39;</span>
+
+        <span class="c"># Allow overrides through optional keyword arguments in extract()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__configure__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;timestamp&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&#39;One or more required configuration parameters were not provided&#39;</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;var_name&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&#39;One or more required configuration parameters were not provided&#39;</span><span class="p">)</span>
+        
+        <span class="c"># Data frame</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">var_name</span><span class="p">)[:],</span> <span class="n">columns</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span>
+            
+        <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Could not get at the variable named &quot;</span><span class="si">%s</span><span class="s">&quot;&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">var_name</span><span class="p">)</span>
+
+        <span class="c"># Add and populate a timestamp field</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">series</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+            <span class="n">t</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">series</span><span class="p">[</span><span class="s">&#39;%Y&#39;</span><span class="p">]),</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">series</span><span class="p">[</span><span class="s">&#39;%j&#39;</span><span class="p">])))</span>
+            
+        <span class="n">df</span><span class="p">[</span><span class="s">&#39;timestamp&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s">&#39;datetime64[ns]&#39;</span><span class="p">)</span>
+
+        <span class="c"># Re-order columns; dispose of extraneous columns            </span>
+        <span class="c"># df = df.loc[:,[&#39;x&#39;, &#39;y&#39;, &#39;t&#39;, &#39;value&#39;, &#39;error&#39;]]</span>
+
+        <span class="c"># Fix the precision of data values</span>
+        <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">formats</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">formats</span><span class="p">[</span><span class="n">col</span><span class="p">]</span> <span class="o">%</span> <span class="n">x</span><span class="p">))</span>
+        
+        <span class="k">return</span> <span class="n">df</span>
+
+</div></div>
+<div class="viewcode-block" id="KrigedXCO2Matrix"><a class="viewcode-back" href="../../index.html#fluxpy.models.KrigedXCO2Matrix">[docs]</a><span class="k">class</span> <span class="nc">KrigedXCO2Matrix</span><span class="p">(</span><span class="n">TransformationInterface</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Understands Kriged XCO2 data as formatted--Typically 6-day spans of XCO2</span>
+<span class="sd">    concentrations (ppm) at daily steps on a latitude-longitude grid.</span>
+<span class="sd">    Matrix dimensions: 14,210 (model cells) x 9 (attributes).</span>
+<span class="sd">    Columns: Longitude, latitude, XCO2 concentration (ppm), retrieval error (ppm)</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">precision</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;y&#39;</span><span class="p">,</span> <span class="s">&#39;x&#39;</span><span class="p">,</span> <span class="s">&#39;values&#39;</span><span class="p">,</span> <span class="s">&#39;errors&#39;</span><span class="p">,</span> <span class="s">&#39;4&#39;</span><span class="p">,</span> <span class="s">&#39;5&#39;</span><span class="p">,</span> <span class="s">&#39;6&#39;</span><span class="p">,</span> <span class="s">&#39;7&#39;</span><span class="p">,</span> <span class="s">&#39;8&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">formats</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;x&#39;</span><span class="p">:</span> <span class="s">&#39;</span><span class="si">%.5f</span><span class="s">&#39;</span><span class="p">,</span>
+            <span class="s">&#39;y&#39;</span><span class="p">:</span> <span class="s">&#39;</span><span class="si">%.5f</span><span class="s">&#39;</span><span class="p">,</span>
+            <span class="s">&#39;values&#39;</span><span class="p">:</span> <span class="s">&#39;</span><span class="si">%.2f</span><span class="s">&#39;</span><span class="p">,</span>
+            <span class="s">&#39;errors&#39;</span><span class="p">:</span> <span class="s">&#39;</span><span class="si">%.4f</span><span class="s">&#39;</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gridded</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">grid</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;x&#39;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+            <span class="s">&#39;y&#39;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+            <span class="s">&#39;units&#39;</span><span class="p">:</span> <span class="s">&#39;degrees&#39;</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">header</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;lat&#39;</span><span class="p">,</span> <span class="s">&#39;lng&#39;</span><span class="p">,</span> <span class="s">&#39;xco2_ppm&#39;</span><span class="p">,</span> <span class="s">&#39;error_ppm^2&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;values&#39;</span><span class="p">,</span> <span class="s">&#39;errors&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">spans</span> <span class="o">=</span> <span class="p">[</span><span class="mi">518400</span><span class="p">]</span> <span class="c"># 6 days in seconds</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">regex</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;regex&#39;</span><span class="p">:</span> <span class="s">&#39;^Kriged_(?P&lt;timestamp&gt;\d{4}\d{2}\d{2})_.*$&#39;</span><span class="p">,</span>
+            <span class="s">&#39;map&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s">&#39;timestamp&#39;</span><span class="p">:</span> <span class="s">&#39;%Y%m</span><span class="si">%d</span><span class="s">&#39;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">transforms</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;errors&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">units</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;x&#39;</span><span class="p">:</span> <span class="s">&#39;degrees&#39;</span><span class="p">,</span>
+            <span class="s">&#39;y&#39;</span><span class="p">:</span> <span class="s">&#39;degrees&#39;</span><span class="p">,</span>
+            <span class="s">&#39;values&#39;</span><span class="p">:</span> <span class="s">&#39;ppm&#39;</span><span class="p">,</span>
+            <span class="s">&#39;errors&#39;</span><span class="p">:</span> <span class="s">&#39;ppm&#39;</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">var_name</span> <span class="o">=</span> <span class="s">&#39;krigedData&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">title</span> <span class="o">=</span> <span class="s">&#39;Kriged XCO2 Test&#39;</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">KrigedXCO2Matrix</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">describe</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">df</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">extract</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="n">bounds</span> <span class="o">=</span> <span class="n">MultiPoint</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">set_index</span><span class="p">([</span><span class="s">&#39;x&#39;</span><span class="p">,</span> <span class="s">&#39;y&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span><span class="o">.</span><span class="n">bounds</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">__metadata__</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;dates&#39;</span><span class="p">:</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">],</span>
+            <span class="s">&#39;bbox&#39;</span><span class="p">:</span> <span class="n">bounds</span><span class="p">,</span>
+            <span class="s">&#39;bboxmd5&#39;</span><span class="p">:</span> <span class="n">md5</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">bounds</span><span class="p">))</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+        <span class="p">}</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">KrigedXCO2Matrix</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__metadata__</span>
+    
+<div class="viewcode-block" id="KrigedXCO2Matrix.extract"><a class="viewcode-back" href="../../index.html#fluxpy.models.KrigedXCO2Matrix.extract">[docs]</a>    <span class="k">def</span> <span class="nf">extract</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Creates a DataFrame properly encapsulating the associated file data&#39;&#39;&#39;</span>
+
+        <span class="c"># Allow overrides through optional keyword arguments in extract()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__configure__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;timestamp&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&#39;One or more required configuration parameters were not provided&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">var_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&#39;One or more required configuration parameters were not provided&#39;</span><span class="p">)</span>
+
+        <span class="n">file_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">file</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">var_name</span><span class="p">)[:]</span>
+        <span class="k">assert</span> <span class="n">file_data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">columns</span><span class="p">),</span> <span class="s">&#39;Mismatched number of columns and number of fields in the data&#39;</span>
+
+        <span class="c"># Data frame</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">file_data</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span>
+
+        <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Could not get at the variable named &quot;</span><span class="si">%s</span><span class="s">&quot;&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">var_name</span><span class="p">)</span>
+
+        <span class="c"># Apply any data transforms</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">transforms</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">col</span><span class="p">,</span> <span class="n">transform</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">transforms</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">transform</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                    <span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">transform</span><span class="p">)</span>
+
+        <span class="c"># Fix the precision of data values</span>
+        <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">formats</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">formats</span><span class="p">[</span><span class="n">col</span><span class="p">]</span> <span class="o">%</span> <span class="n">x</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">df</span>
+</div>
+    <span class="k">def</span> <span class="nf">get_coords</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">extract</span><span class="p">()</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="p">[</span><span class="n">c</span><span class="p">[</span><span class="s">&#39;x&#39;</span><span class="p">],</span> <span class="n">c</span><span class="p">[</span><span class="s">&#39;y&#39;</span><span class="p">]],</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">flux-python-api 0.01 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, K. Arthur Endsley.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

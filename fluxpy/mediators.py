@@ -1,12 +1,16 @@
-'''
-Example data: /ws4/idata/fluxvis/casa_gfed_inversion_results/1.zerofull_casa_1pm_10twr/Month_Uncert1.mat
 
-from fluxpy.mediators import *
-from fluxpy.models import *
-mediator = Grid3DMediator()
-xco2 = KrigedXCO2Matrix('xco2_data.mat', timestamp='2009-06-15')
-mediator.add(xco2).save_to_db('my_xco2_data')
-'''
+# Commenting this out so that it is not picked up by Sphinx autodoc
+#===============================================================================
+# Example data:
+# /ws4/idata/fluxvis/casa_gfed_inversion_results/1.zerofull_casa_1pm_10twr/Month_Uncert1.mat
+# 
+# from fluxpy.mediators import *
+# from fluxpy.models import *
+# mediator = Grid3DMediator()
+# xco2 = KrigedXCO2Matrix('xco2_data.mat', timestamp='2009-06-15')
+# mediator.add(xco2).save_to_db('my_xco2_data')
+#===============================================================================
+
 
 import datetime
 import os

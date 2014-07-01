@@ -1,0 +1,569 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>fluxpy.mediators &mdash; flux-python-api 0.01 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.01',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="flux-python-api 0.01 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">flux-python-api 0.01 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for fluxpy.mediators</h1><div class="highlight"><pre>
+<span class="c"># Commenting this out so that it is not picked up by Sphinx autodoc</span>
+<span class="c">#===============================================================================</span>
+<span class="c"># Example data:</span>
+<span class="c"># /ws4/idata/fluxvis/casa_gfed_inversion_results/1.zerofull_casa_1pm_10twr/Month_Uncert1.mat</span>
+<span class="c"># </span>
+<span class="c"># from fluxpy.mediators import *</span>
+<span class="c"># from fluxpy.models import *</span>
+<span class="c"># mediator = Grid3DMediator()</span>
+<span class="c"># xco2 = KrigedXCO2Matrix(&#39;xco2_data.mat&#39;, timestamp=&#39;2009-06-15&#39;)</span>
+<span class="c"># mediator.add(xco2).save_to_db(&#39;my_xco2_data&#39;)</span>
+<span class="c">#===============================================================================</span>
+
+
+<span class="kn">import</span> <span class="nn">datetime</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="kn">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">dateutil</span> <span class="kn">import</span> <span class="n">parser</span>
+<span class="kn">from</span> <span class="nn">pymongo</span> <span class="kn">import</span> <span class="n">MongoClient</span>
+<span class="kn">from</span> <span class="nn">fluxpy</span> <span class="kn">import</span> <span class="n">DB</span><span class="p">,</span> <span class="n">DEFAULT_PATH</span><span class="p">,</span> <span class="n">ISO_8601</span><span class="p">,</span> <span class="n">RESERVED_COLLECTION_NAMES</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">hashlib</span> <span class="kn">import</span> <span class="n">md5</span>
+
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">md5</span>
+
+<span class="k">class</span> <span class="nc">Mediator</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<div class="viewcode-block" id="Mediator"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Mediator">[docs]</a>    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    A generic model for transforming data between foreign formats and the</span>
+<span class="sd">    persistence layer of choice (MongoDB in this application). Mediator calls</span>
+<span class="sd">    the extract() method on subclasses of the TransformationInterface (those</span>
+<span class="sd">    classes that interpret foreign formats).</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">db_name</span><span class="o">=</span><span class="n">DB</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">client</span> <span class="o">=</span> <span class="n">client</span> <span class="ow">or</span> <span class="n">MongoClient</span><span class="p">()</span> <span class="c"># The MongoDB client; defaults: MongoClient(&#39;localhost&#39;, 27017)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db_name</span> <span class="o">=</span> <span class="n">db_name</span> <span class="c"># The name of the MongoDB database</span>
+
+    <span class="k">def</span> <span class="nf">__get_updates__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">,</span> <span class="n">metadata</span><span class="p">):</span>
+        <span class="c"># Updates the metadata in the passed MongoDB query</span>
+        <span class="n">last_metadata</span> <span class="o">=</span> <span class="n">query</span><span class="o">.</span><span class="n">next</span><span class="p">()</span>
+        <span class="n">update_selection</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">if</span> <span class="n">last_metadata</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;dates&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">last_metadata</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;steps&#39;</span><span class="p">):</span>
+                <span class="n">key</span> <span class="o">=</span> <span class="s">&#39;steps&#39;</span>
+
+            <span class="k">elif</span> <span class="n">last_metadata</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;spans&#39;</span><span class="p">):</span>
+                <span class="n">key</span> <span class="o">=</span> <span class="s">&#39;spans&#39;</span>
+
+            <span class="n">last_dates</span> <span class="o">=</span> <span class="n">last_metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;dates&#39;</span><span class="p">)</span>
+            <span class="n">dates_update</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">last_metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;dates&#39;</span><span class="p">))</span>
+            <span class="n">steps_update</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">last_metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">))</span>
+
+            <span class="k">for</span> <span class="n">datestr</span><span class="p">,</span> <span class="n">step_or_span</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;dates&#39;</span><span class="p">),</span> <span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)):</span>
+                <span class="n">date</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">datestr</span><span class="p">)</span>
+
+                <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="k">while</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">last_dates</span><span class="p">):</span>
+                    <span class="n">dt</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="n">step_or_span</span><span class="p">)</span>
+                    <span class="n">last_date</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">last_dates</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                    <span class="n">very_last_date</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">last_dates</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+
+                    <span class="c"># If this date is 1 step or span away from the last...</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="n">date</span> <span class="o">+</span> <span class="n">dt</span><span class="p">)</span> <span class="o">==</span> <span class="n">last_date</span> <span class="ow">or</span> <span class="p">(</span><span class="n">date</span> <span class="o">+</span> <span class="n">dt</span><span class="p">)</span> <span class="o">==</span> <span class="n">very_last_date</span><span class="p">:</span>
+                        <span class="k">break</span>
+
+                    <span class="c"># Is it before the most recent date?</span>
+                    <span class="k">if</span> <span class="n">date</span> <span class="o">&lt;</span> <span class="n">last_date</span><span class="p">:</span>
+
+                        <span class="c"># Insert older timestamp, step/span e.g. [old, *new, old, old]</span>
+                        <span class="n">dates_update</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">datestr</span><span class="p">)</span>
+                        <span class="n">steps_update</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">step_or_span</span><span class="p">)</span>
+                        <span class="k">break</span>
+
+                    <span class="c"># Is it being compared to the last date and still more recent?</span>
+                    <span class="k">elif</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">last_dates</span><span class="p">)</span> <span class="ow">and</span> <span class="n">date</span> <span class="o">&gt;</span> <span class="n">very_last_date</span><span class="p">:</span>
+
+                        <span class="k">if</span> <span class="n">date</span> <span class="o">!=</span> <span class="n">very_last_date</span><span class="p">:</span>
+                            <span class="c"># Add new timestamp, step/span e.g.: [old, old, *new]</span>
+                            <span class="n">dates_update</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">datestr</span><span class="p">)</span>
+                            <span class="n">steps_update</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">step_or_span</span><span class="p">)</span>
+                            <span class="k">break</span>
+
+                    <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">if</span> <span class="n">last_metadata</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;steps&#39;</span><span class="p">):</span>
+            <span class="n">update_selection</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
+                <span class="s">&#39;dates&#39;</span><span class="p">:</span> <span class="n">dates_update</span><span class="p">,</span>
+                <span class="s">&#39;steps&#39;</span><span class="p">:</span> <span class="n">steps_update</span>
+            <span class="p">})</span>
+
+        <span class="k">elif</span> <span class="n">last_metadata</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;spans&#39;</span><span class="p">):</span>
+            <span class="n">update_selection</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
+                <span class="s">&#39;dates&#39;</span><span class="p">:</span> <span class="n">dates_update</span><span class="p">,</span>
+                <span class="s">&#39;spans&#39;</span><span class="p">:</span> <span class="n">steps_update</span>
+            <span class="p">})</span>
+
+        <span class="k">return</span> <span class="n">update_selection</span>
+
+    <span class="k">def</span> <span class="nf">copy_grid_geometry</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reference_name</span><span class="p">):</span>
+        <span class="n">coords</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="s">&#39;coord_index&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">find</span><span class="p">({</span>
+            <span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="n">reference_name</span>
+        <span class="p">})</span><span class="o">.</span><span class="n">next</span><span class="p">()[</span><span class="s">&#39;i&#39;</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="s">&#39;coord_index&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">insert</span><span class="p">({</span>
+            <span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="n">collection_name</span><span class="p">,</span>
+            <span class="s">&#39;i&#39;</span><span class="p">:</span> <span class="n">coords</span>
+        <span class="p">})</span>
+
+    <span class="k">def</span> <span class="nf">generate_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+<div class="viewcode-block" id="Mediator.generate_metadata"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Mediator.generate_metadata">[docs]</a>        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Creates an entry in the metadata collection for this instance of data;</span>
+<span class="sd">        updates the summary statistics of that entry if it already exists.</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">Generating metadata...&#39;</span><span class="p">)</span>
+        
+        <span class="c"># Get the metadata</span>
+        <span class="n">metadata</span> <span class="o">=</span> <span class="n">instance</span><span class="o">.</span><span class="n">describe</span><span class="p">()</span>
+
+        <span class="c"># Set the unique identifier; include the summary statistics</span>
+        <span class="n">metadata</span><span class="p">[</span><span class="s">&#39;_id&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">collection_name</span>
+        <span class="n">metadata</span><span class="p">[</span><span class="s">&#39;stats&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">summarize</span><span class="p">(</span><span class="n">collection_name</span><span class="p">)</span>
+
+        <span class="c"># Find or create metadata; if it already exists, update it based on the</span>
+        <span class="c">#   the new values in the time series being considered</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="s">&#39;metadata&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">find</span><span class="p">({</span>
+            <span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="n">collection_name</span>
+        <span class="p">})</span>
+        <span class="k">if</span> <span class="n">query</span><span class="o">.</span><span class="n">count</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="s">&#39;metadata&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">metadata</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="n">force</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="s">&#39;metadata&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">remove</span><span class="p">({</span><span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="n">collection_name</span><span class="p">})</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="s">&#39;metadata&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">metadata</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">update_selection</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__get_updates__</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">metadata</span><span class="p">)</span>
+
+            <span class="c"># If anything&#39;s changed, update the database!</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">update_selection</span><span class="o">.</span><span class="n">items</span><span class="p">())</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="c"># Update the metadata</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="s">&#39;metadata&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
+                    <span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="n">collection_name</span>
+                <span class="p">},</span> <span class="p">{</span>
+                    <span class="s">&#39;$set&#39;</span><span class="p">:</span> <span class="n">update_selection</span>
+                <span class="p">})</span>
+
+        <span class="k">return</span> <span class="n">metadata</span>
+
+    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">,</span> <span class="n">instance</span><span class="p">):</span></div>
+<div class="viewcode-block" id="Mediator.save"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Mediator.save">[docs]</a>        <span class="sd">&#39;&#39;&#39;Transforms contents of Data Frame into JSON representation for MongoDB&#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">collection_name</span> <span class="ow">in</span> <span class="n">RESERVED_COLLECTION_NAMES</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;The collection name provided is a reserved name&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">summarize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">,</span> <span class="n">query</span><span class="o">=</span><span class="p">{}):</span></div>
+<div class="viewcode-block" id="Mediator.summarize"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Mediator.summarize">[docs]</a>        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Generates summary statistics by parameter over the data in a collection.</span>
+<span class="sd">        This was designed and tested for the &quot;3D&quot; case i.e. spatial data in a</span>
+<span class="sd">        tabular form and NOT for the &quot;4D&quot; case i.e. spatiotemporal data in a</span>
+<span class="sd">        matrix form.</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">disallowed_params</span> <span class="o">=</span> <span class="p">(</span><span class="s">&#39;x&#39;</span><span class="p">,</span> <span class="s">&#39;y&#39;</span><span class="p">,</span> <span class="s">&#39;timestamp&#39;</span><span class="p">)</span>
+        <span class="n">dfs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">collection_name</span><span class="p">,</span> <span class="n">query</span><span class="p">)</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">dfs</span><span class="p">)</span> <span class="o">==</span> <span class="nb">dict</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">df</span> <span class="ow">in</span> <span class="n">dfs</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span><span class="o">.</span><span class="n">values</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">disallowed_params</span><span class="p">:</span>
+                        <span class="k">continue</span>
+
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">values</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="n">param</span><span class="p">):</span>
+                        <span class="n">values</span><span class="p">[</span><span class="n">param</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">([])</span>
+
+                    <span class="n">values</span><span class="p">[</span><span class="n">param</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span>
+                        <span class="n">values</span><span class="p">[</span><span class="n">param</span><span class="p">],</span> <span class="n">df</span><span class="p">[</span><span class="n">param</span><span class="p">]</span>
+                    <span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="nb">type</span><span class="p">(</span><span class="n">dfs</span><span class="p">)</span> <span class="o">==</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="n">dfs</span>
+
+        <span class="n">summary</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">values</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">disallowed_params</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">summary</span><span class="p">[</span><span class="n">param</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s">&#39;mean&#39;</span><span class="p">:</span> <span class="n">values</span><span class="p">[</span><span class="n">param</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">(),</span>
+                <span class="s">&#39;min&#39;</span><span class="p">:</span> <span class="n">values</span><span class="p">[</span><span class="n">param</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">(),</span>
+                <span class="s">&#39;max&#39;</span><span class="p">:</span> <span class="n">values</span><span class="p">[</span><span class="n">param</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span>
+                <span class="s">&#39;std&#39;</span><span class="p">:</span> <span class="n">values</span><span class="p">[</span><span class="n">param</span><span class="p">]</span><span class="o">.</span><span class="n">std</span><span class="p">(),</span>
+                <span class="s">&#39;median&#39;</span><span class="p">:</span> <span class="n">values</span><span class="p">[</span><span class="n">param</span><span class="p">]</span><span class="o">.</span><span class="n">median</span><span class="p">()</span>
+            <span class="p">}</span>
+
+        <span class="k">return</span> <span class="n">summary</span>
+
+
+<span class="k">class</span> <span class="nc">Grid4DMediator</span><span class="p">(</span><span class="n">Mediator</span><span class="p">):</span></div></div>
+<div class="viewcode-block" id="Grid4DMediator"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Grid4DMediator">[docs]</a>    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Mediator that understands spatial data on a structured, longitude-latitude</span>
+<span class="sd">    grid that vary in time; two spatial dimensions and an aribtrary number of</span>
+<span class="sd">    time steps (frames). Geometry expected as grid centroids (e.g. centroids</span>
+<span class="sd">    of 1-degree grid cells).</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+
+    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">,</span> <span class="n">query</span><span class="p">):</span>
+        <span class="c"># Retrieve a cursor to iterate over the records matching the query</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="n">collection_name</span><span class="p">]</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="p">{</span>
+            <span class="s">&#39;values&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="p">})</span>
+        
+        <span class="c"># Create an n x 2 matrix of the longitude-latitude coordinates</span>
+        <span class="n">coords</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="s">&#39;coord_index&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">find</span><span class="p">({</span>
+            <span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="n">collection_name</span>
+        <span class="p">})</span><span class="o">.</span><span class="n">next</span><span class="p">()[</span><span class="s">&#39;i&#39;</span><span class="p">])</span>
+        
+        <span class="c"># Create a DataFrame of longitude-latitude coordinates</span>
+        <span class="n">coords</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">coords</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;x&#39;</span><span class="p">,</span> <span class="s">&#39;y&#39;</span><span class="p">))</span>
+
+        <span class="n">series</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">ids</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">record</span> <span class="ow">in</span> <span class="n">cursor</span><span class="p">:</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s">&#39;values&#39;</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="s">&#39;float64&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">record</span><span class="p">[</span><span class="s">&#39;_id&#39;</span><span class="p">])</span>
+            <span class="n">series</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
+            <span class="n">ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;_id&#39;</span><span class="p">))</span>
+
+        <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span>
+            <span class="n">coords</span><span class="p">,</span>
+            <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">series</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c"># Capture a new DataFrame with a MultiIndex; promotes these columns to indexes</span>
+        <span class="n">dfm</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">set_index</span><span class="p">([</span><span class="s">&#39;x&#39;</span><span class="p">,</span> <span class="s">&#39;y&#39;</span><span class="p">])</span>
+
+        <span class="k">return</span> <span class="n">dfm</span>
+
+    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Grid4DMediator</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">collection_name</span><span class="p">,</span> <span class="n">instance</span><span class="p">)</span>
+
+        <span class="n">df</span> <span class="o">=</span> <span class="n">instance</span><span class="o">.</span><span class="n">extract</span><span class="p">()</span>
+
+        <span class="c"># Create the index of grid cell coordinates, if needed</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="s">&#39;coord_index&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">find</span><span class="p">({</span>
+            <span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="n">collection_name</span>
+        <span class="p">})</span><span class="o">.</span><span class="n">count</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="s">&#39;coord_index&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">insert</span><span class="p">({</span>
+                <span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="n">collection_name</span><span class="p">,</span>
+                <span class="s">&#39;i&#39;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+            <span class="p">})</span>
+
+        <span class="c"># Iterate over the transpose of the data frame</span>
+        <span class="n">total_records</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">timestamp</span><span class="p">,</span> <span class="n">series</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">T</span><span class="o">.</span><span class="n">iterrows</span><span class="p">()):</span>
+            <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="s">&#39;precision&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="n">collection_name</span><span class="p">]</span><span class="o">.</span><span class="n">insert</span><span class="p">({</span>
+                    <span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="n">timestamp</span><span class="p">,</span>
+                    <span class="s">&#39;values&#39;</span><span class="p">:</span> <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">instance</span><span class="o">.</span><span class="n">precision</span><span class="p">),</span>
+                        <span class="n">series</span><span class="o">.</span><span class="n">iterkv</span><span class="p">())</span>
+                <span class="p">})</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="n">collection_name</span><span class="p">]</span><span class="o">.</span><span class="n">insert</span><span class="p">({</span>
+                    <span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="n">timestamp</span><span class="p">,</span>
+                    <span class="s">&#39;values&#39;</span><span class="p">:</span> <span class="n">series</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+                <span class="p">})</span>
+                
+            <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\r</span><span class="s">Inserted </span><span class="si">%d</span><span class="s"> of </span><span class="si">%d</span><span class="s"> records...&#39;</span>
+                                 <span class="o">%</span> <span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">total_records</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">generate_metadata</span><span class="p">(</span><span class="n">collection_name</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">summarize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">,</span> <span class="n">query</span><span class="o">=</span><span class="p">{}):</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">collection_name</span><span class="p">,</span> <span class="n">query</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s">&#39;values&#39;</span><span class="p">:</span> <span class="p">{</span> <span class="c"># Axis 0 is the &quot;row-wise&quot; axis</span>
+                <span class="s">&#39;mean&#39;</span><span class="p">:</span> <span class="n">df</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">(),</span>
+                <span class="s">&#39;min&#39;</span><span class="p">:</span> <span class="n">df</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">min</span><span class="p">(),</span>
+                <span class="s">&#39;max&#39;</span><span class="p">:</span> <span class="n">df</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span>
+                <span class="s">&#39;std&#39;</span><span class="p">:</span> <span class="n">df</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">std</span><span class="p">(),</span>
+                <span class="s">&#39;median&#39;</span><span class="p">:</span> <span class="n">df</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">median</span><span class="p">()</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+
+
+<span class="k">class</span> <span class="nc">Grid3DMediator</span><span class="p">(</span><span class="n">Mediator</span><span class="p">):</span></div>
+<div class="viewcode-block" id="Grid3DMediator"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Grid3DMediator">[docs]</a>    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Mediator that understands single-valued, spatial data on a structured,</span>
+<span class="sd">    longitude-latitude grid; two spatial dimensions, one value dimension (3D).</span>
+<span class="sd">    Geometry expected as grid centroids (e.g. centroids of 1-degree grid cells).</span>
+<span class="sd">    Additional fields beyond the &quot;values&quot; field may be included; currently</span>
+<span class="sd">    supported is the additional &quot;errors&quot; field.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__align__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">alignment</span><span class="p">):</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">instance</span><span class="o">.</span><span class="n">extract</span><span class="p">()</span>
+
+        <span class="c"># Get a list of column names for only the essential parameters</span>
+        <span class="n">cols</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;x&#39;</span><span class="p">,</span> <span class="s">&#39;y&#39;</span><span class="p">]</span>
+        <span class="n">cols</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">parameters</span><span class="p">)</span>
+
+        <span class="c"># Remove extraneous columns; create the index on the incoming data frame</span>
+        <span class="n">dfm</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">ix</span><span class="p">[</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">cols</span><span class="p">]</span><span class="o">.</span><span class="n">set_index</span><span class="p">([</span><span class="s">&#39;x&#39;</span><span class="p">,</span> <span class="s">&#39;y&#39;</span><span class="p">])</span>
+
+        <span class="c"># Get the two aligned DataFrames</span>
+        <span class="n">empty</span><span class="p">,</span> <span class="n">aligned</span> <span class="o">=</span> <span class="n">alignment</span><span class="o">.</span><span class="n">align</span><span class="p">(</span><span class="n">dfm</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="c"># Return None in place of NaN</span>
+        <span class="k">return</span> <span class="n">aligned</span><span class="o">.</span><span class="n">where</span><span class="p">((</span><span class="n">pd</span><span class="o">.</span><span class="n">notnull</span><span class="p">(</span><span class="n">aligned</span><span class="p">)),</span> <span class="bp">None</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">,</span> <span class="n">query</span><span class="o">=</span><span class="p">{}):</span>
+        <span class="c"># Retrieve a cursor to iterate over the records matching the query</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="n">collection_name</span><span class="p">]</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="p">{</span>
+            <span class="s">&#39;values&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="s">&#39;errors&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="p">})</span>
+        
+        <span class="c"># Create an n x 2 matrix of the longitude-latitude coordinates</span>
+        <span class="n">coords</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="s">&#39;coord_index&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">find</span><span class="p">({</span>
+            <span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="n">collection_name</span>
+        <span class="p">})</span><span class="o">.</span><span class="n">next</span><span class="p">()[</span><span class="s">&#39;i&#39;</span><span class="p">])</span>
+        
+        <span class="c"># Create a DataFrame of longitude-latitude coordinates</span>
+        <span class="n">coords</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">coords</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;x&#39;</span><span class="p">,</span> <span class="s">&#39;y&#39;</span><span class="p">))</span>
+
+        <span class="n">frames</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">ids</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">record</span> <span class="ow">in</span> <span class="n">cursor</span><span class="p">:</span>
+            <span class="c"># Create values and error Series; concatenate them as a DataFrame,</span>
+            <span class="c">#   then concatenate them with the coordinates DataFrame</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s">&#39;values&#39;</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="s">&#39;float64&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">&#39;values&#39;</span><span class="p">)</span>
+            <span class="n">errors</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s">&#39;errors&#39;</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="s">&#39;float64&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">&#39;errors&#39;</span><span class="p">)</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span>
+                <span class="n">coords</span><span class="p">,</span>
+                <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">values</span><span class="p">,</span> <span class="n">errors</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+            <span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+            
+            <span class="n">frames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+            <span class="n">ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;_id&#39;</span><span class="p">))</span>
+
+        <span class="c"># Convert the Python datetime instances to ISO 8601 timestamps</span>
+        <span class="n">ids</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">d</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="s">&#39;%Y-%m-</span><span class="si">%d</span><span class="s">T%H:%M:%S&#39;</span><span class="p">),</span> <span class="n">ids</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">ids</span><span class="p">,</span> <span class="n">frames</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">alignment</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Grid3DMediator</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">collection_name</span><span class="p">,</span> <span class="n">instance</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">alignment</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__align__</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">alignment</span><span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">instance</span><span class="o">.</span><span class="n">extract</span><span class="p">()</span>
+
+        <span class="c"># Expect that a valid timestamp was provided</span>
+        <span class="k">if</span> <span class="n">instance</span><span class="o">.</span><span class="n">timestamp</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&#39;Expected a model to have a &quot;timestamp&quot; parameter; is this the right model for this Mediator?&#39;</span><span class="p">)</span>
+
+        <span class="c"># Create the index of grid cell coordinates, if needed</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="s">&#39;coord_index&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">find</span><span class="p">({</span>
+            <span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="n">collection_name</span>
+        <span class="p">})</span><span class="o">.</span><span class="n">count</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="s">&#39;coord_index&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">insert</span><span class="p">({</span>
+                <span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="n">collection_name</span><span class="p">,</span>
+                <span class="s">&#39;i&#39;</span><span class="p">:</span> <span class="n">df</span><span class="o">.</span><span class="n">set_index</span><span class="p">([</span><span class="s">&#39;x&#39;</span><span class="p">,</span> <span class="s">&#39;y&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+            <span class="p">})</span>
+
+        <span class="c"># Create the data document itself</span>
+        <span class="n">data_dict</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">timestamp</span><span class="p">)</span>
+        <span class="p">}</span>
+
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="s">&#39;spans&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">metadata</span> <span class="o">=</span> <span class="n">instance</span><span class="o">.</span><span class="n">describe</span><span class="p">()</span>
+                <span class="n">data_dict</span><span class="p">[</span><span class="s">&#39;_span&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">metadata</span><span class="p">[</span><span class="s">&#39;spans&#39;</span><span class="p">][</span>
+                    <span class="n">metadata</span><span class="p">[</span><span class="s">&#39;dates&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">timestamp</span><span class="p">)</span>
+                <span class="p">]</span>
+
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="n">data_dict</span><span class="p">[</span><span class="s">&#39;_span&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">instance</span><span class="o">.</span><span class="n">spans</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">instance</span><span class="o">.</span><span class="n">parameters</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">Processing data for parameter: {0}...&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">param</span><span class="p">))</span>
+            <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="s">&#39;precision&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">data_dict</span><span class="p">[</span><span class="n">param</span><span class="p">]</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                    <span class="n">instance</span><span class="o">.</span><span class="n">precision</span><span class="p">)</span> <span class="k">if</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="bp">None</span><span class="p">,</span> <span class="n">df</span><span class="p">[</span><span class="n">param</span><span class="p">]</span><span class="o">.</span><span class="n">iterkv</span><span class="p">())</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">data_dict</span><span class="p">[</span><span class="n">param</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">param</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+                
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">Inserting records...&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="n">collection_name</span><span class="p">]</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">data_dict</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">generate_metadata</span><span class="p">(</span><span class="n">collection_name</span><span class="p">,</span> <span class="n">instance</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">Unstructured3DMediator</span><span class="p">(</span><span class="n">Mediator</span><span class="p">):</span></div>
+<div class="viewcode-block" id="Unstructured3DMediator"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Unstructured3DMediator">[docs]</a>    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Mediator that understands single-valued, spatial data with arbitrary</span>
+<span class="sd">    positions given as longitude-latitude pairs; two spatial dimensions, one</span>
+<span class="sd">    value dimension (3D).</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+
+    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">,</span> <span class="n">query</span><span class="o">=</span><span class="p">{}):</span>
+        <span class="c"># Retrieve a cursor to iterate over the records matching the query</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="n">collection_name</span><span class="p">]</span><span class="o">.</span><span class="n">aggregate</span><span class="p">([{</span>
+            <span class="s">&#39;$match&#39;</span><span class="p">:</span> <span class="n">query</span><span class="p">,</span>
+        <span class="p">},</span> <span class="p">{</span>
+            <span class="s">&#39;$group&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+                <span class="s">&#39;timestamp&#39;</span><span class="p">:</span> <span class="p">{</span> <span class="s">&#39;$push&#39;</span><span class="p">:</span> <span class="s">&#39;$timestamp&#39;</span> <span class="p">},</span>
+                <span class="s">&#39;value&#39;</span><span class="p">:</span> <span class="p">{</span> <span class="s">&#39;$push&#39;</span><span class="p">:</span> <span class="s">&#39;$properties.value&#39;</span> <span class="p">},</span>
+                <span class="s">&#39;error&#39;</span><span class="p">:</span> <span class="p">{</span> <span class="s">&#39;$push&#39;</span><span class="p">:</span> <span class="s">&#39;$properties.error&#39;</span> <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">},</span> <span class="p">{</span>
+            <span class="s">&#39;$project&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+                <span class="s">&#39;timestamp&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+                <span class="s">&#39;value&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+                <span class="s">&#39;error&#39;</span><span class="p">:</span> <span class="mi">1</span>
+            <span class="p">}</span>
+        <span class="p">}])</span>
+
+        <span class="n">series</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">aggregate</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s">&#39;result&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">aggregate</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="n">series</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">aggregate</span><span class="p">[</span><span class="n">param</span><span class="p">],</span> <span class="n">name</span><span class="o">=</span><span class="n">param</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">series</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    
+    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Unstructured3DMediator</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">collection_name</span><span class="p">,</span> <span class="n">instance</span><span class="p">)</span>
+
+        <span class="n">is_multi</span> <span class="o">=</span> <span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">geometry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;type&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">:</span><span class="mi">5</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;Multi&#39;</span><span class="p">)</span>
+
+        <span class="n">df</span> <span class="o">=</span> <span class="n">instance</span><span class="o">.</span><span class="n">extract</span><span class="p">()</span>
+        <span class="n">features</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">series</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+            <span class="n">data_dict</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s">&#39;timestamp&#39;</span><span class="p">:</span> <span class="n">series</span><span class="p">[</span><span class="s">&#39;timestamp&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">to_datetime</span><span class="p">(),</span>
+                <span class="s">&#39;coordinates&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">series</span><span class="p">[</span><span class="s">&#39;x&#39;</span><span class="p">],</span> <span class="n">series</span><span class="p">[</span><span class="s">&#39;y&#39;</span><span class="p">]],</span>
+                <span class="s">&#39;properties&#39;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">()</span>
+            <span class="p">}</span>
+
+            <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">instance</span><span class="o">.</span><span class="n">parameters</span><span class="p">:</span>
+                <span class="n">data_dict</span><span class="p">[</span><span class="s">&#39;properties&#39;</span><span class="p">][</span><span class="n">param</span><span class="p">]</span> <span class="o">=</span> <span class="n">series</span><span class="p">[</span><span class="n">param</span><span class="p">]</span>
+
+            <span class="n">features</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">data_dict</span><span class="p">)</span>
+
+        <span class="c"># If it&#39;s a collection, we can assume each data member is unique;</span>
+        <span class="c">#   we insert a single document</span>
+        <span class="k">if</span> <span class="n">is_multi</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">Inserting records...&#39;</span><span class="p">)</span>
+
+            <span class="n">j</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="n">collection_name</span><span class="p">]</span><span class="o">.</span><span class="n">insert</span><span class="p">({</span>
+                <span class="s">&#39;features&#39;</span><span class="p">:</span> <span class="n">features</span>
+            <span class="p">})</span>
+
+        <span class="c"># Otherwise, each data member may not be unique e.g. each is a POINT</span>
+        <span class="c">#   among potentially other POINTs at the same date/time</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">total_records</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">features</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">feature</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">features</span><span class="p">):</span>
+                <span class="n">j</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="n">collection_name</span><span class="p">]</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">feature</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+                    <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\r</span><span class="s">Inserted </span><span class="si">%d</span><span class="s"> of </span><span class="si">%d</span><span class="s"> records...&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">total_records</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">generate_metadata</span><span class="p">(</span><span class="n">collection_name</span><span class="p">,</span> <span class="n">instance</span><span class="p">)</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">flux-python-api 0.01 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, K. Arthur Endsley.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

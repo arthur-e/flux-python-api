@@ -30,7 +30,7 @@ class TransformationInterface(object):
     subclasses. The extract() method may take unique arguments as optional keyword
     arguments (they must default to None). The dump() method must take only one
     argument which is the interchange datum (a dictionary). A configuration
-    file may be provided as a *.json file with the same name as the data file.
+    file may be provided as a *.json* file with the same name as the data file.
     '''
     path_regex = re.compile(r'.+\.(?P<extension>mat|h5)')
     var_regex = re.compile(r'^(?!__).*(?!__)$') # Skips __private__ variable names

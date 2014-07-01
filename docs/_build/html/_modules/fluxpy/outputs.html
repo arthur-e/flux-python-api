@@ -1,0 +1,691 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>fluxpy.outputs &mdash; flux-python-api 0.01 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.01',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="flux-python-api 0.01 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">flux-python-api 0.01 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for fluxpy.outputs</h1><div class="highlight"><pre>
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">For generating specific, derived outputs from spatio-temporal data. If a class</span>
+<span class="sd">here has the render() method on one of its instances, the method is expected</span>
+<span class="sd">to return a string or sequence of strings where each string is a file system </span>
+<span class="sd">path (either a directory or a file).</span>
+<span class="sd">&#39;&#39;&#39;</span>
+
+<span class="kn">import</span> <span class="nn">datetime</span><span class="o">,</span> <span class="nn">os</span><span class="o">,</span> <span class="nn">sys</span><span class="o">,</span> <span class="nn">re</span><span class="o">,</span> <span class="nn">math</span><span class="o">,</span> <span class="nn">warnings</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">matplotlib.patches</span> <span class="kn">as</span> <span class="nn">mpatches</span>
+<span class="kn">from</span> <span class="nn">zipfile</span> <span class="kn">import</span> <span class="n">ZipFile</span><span class="p">,</span> <span class="n">ZIP_DEFLATED</span>
+<span class="kn">from</span> <span class="nn">matplotlib.collections</span> <span class="kn">import</span> <span class="n">PatchCollection</span>
+<span class="kn">from</span> <span class="nn">pykml.factory</span> <span class="kn">import</span> <span class="n">nsmap</span>
+<span class="kn">from</span> <span class="nn">pykml.factory</span> <span class="kn">import</span> <span class="n">KML_ElementMaker</span> <span class="k">as</span> <span class="n">KML</span>
+<span class="kn">from</span> <span class="nn">pykml.factory</span> <span class="kn">import</span> <span class="n">GX_ElementMaker</span> <span class="k">as</span> <span class="n">GX</span>
+<span class="kn">from</span> <span class="nn">lxml</span> <span class="kn">import</span> <span class="n">etree</span>
+<span class="kn">from</span> <span class="nn">shapely.geometry</span> <span class="kn">import</span> <span class="n">Point</span>
+<span class="kn">from</span> <span class="nn">fluxpy</span> <span class="kn">import</span> <span class="n">DB</span><span class="p">,</span> <span class="n">DEFAULT_PATH</span><span class="p">,</span> <span class="n">RESERVED_COLLECTION_NAMES</span>
+<span class="kn">from</span> <span class="nn">fluxpy.colors</span> <span class="kn">import</span> <span class="n">COLORS</span><span class="p">,</span> <span class="n">DivergingColors</span><span class="p">,</span> <span class="n">SequentialColors</span>
+
+<div class="viewcode-block" id="AbstractGridView"><a class="viewcode-back" href="../../index.html#fluxpy.outputs.AbstractGridView">[docs]</a><span class="k">class</span> <span class="nc">AbstractGridView</span><span class="p">:</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    An abstract class of gridded outputs.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">alpha</span> <span class="o">=</span> <span class="mf">1.0</span>
+    <span class="n">colors</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">([(</span><span class="n">n</span><span class="p">,</span> <span class="n">SequentialColors</span><span class="p">(</span><span class="n">n</span><span class="p">))</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">COLORS</span><span class="o">.</span><span class="n">keys</span><span class="p">()])</span>
+    <span class="n">filename_pattern</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s">_</span><span class="si">%d</span><span class="s">.kml&#39;</span> <span class="c"># Must have %s and %d format strings in name</span>
+    <span class="n">legend_size</span> <span class="o">=</span> <span class="p">(</span><span class="mf">2.5</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">)</span> <span class="c"># Size of the legend in inches</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mediator</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mediator</span> <span class="o">=</span> <span class="n">mediator</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">model</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">collection_name</span> <span class="o">=</span> <span class="n">collection_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">field_units</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">columns</span><span class="p">,</span> <span class="n">model</span><span class="o">.</span><span class="n">units</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">__breakpoints__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">series</span><span class="p">,</span> <span class="n">bins</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">bins</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&#39;Integer bins argument expected&#39;</span><span class="p">)</span>
+
+        <span class="n">steps</span> <span class="o">=</span> <span class="mi">10</span> 
+        <span class="n">ll</span> <span class="o">=</span> <span class="mi">0</span> <span class="c"># Lower limit</span>
+
+        <span class="c"># If there is an odd number of bins...</span>
+        <span class="k">if</span> <span class="n">bins</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">ll</span> <span class="o">=</span> <span class="mi">5</span>
+
+        <span class="c"># We&#39;ll move the decimal place left by one (1) for these calculations...</span>
+        <span class="n">bps</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="n">bins</span> <span class="o">*</span> <span class="mi">5</span><span class="p">),</span> <span class="mi">0</span><span class="p">,</span> <span class="n">steps</span><span class="p">)</span>
+        <span class="n">bps</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">ll</span><span class="p">,</span> <span class="p">(</span><span class="n">bins</span> <span class="o">*</span> <span class="mi">5</span><span class="p">),</span> <span class="n">steps</span><span class="p">))</span>
+        <span class="n">bps</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">bins</span> <span class="o">*</span> <span class="mi">5</span><span class="p">)</span>
+        <span class="n">bps</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="mf">0.1</span> <span class="o">*</span> <span class="n">series</span><span class="o">.</span><span class="n">std</span><span class="p">())</span> <span class="o">+</span> <span class="n">series</span><span class="o">.</span><span class="n">mean</span><span class="p">(),</span> <span class="n">bps</span><span class="p">)</span>
+        <span class="n">bps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span>
+        <span class="n">bps</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+        <span class="n">bps</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">)</span>
+
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">bps</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">==</span> <span class="n">bins</span><span class="p">,</span> <span class="s">&#39;The correct number of breakpoints could not be calculated&#39;</span>
+        <span class="k">return</span> <span class="n">bps</span>
+
+    <span class="k">def</span> <span class="nf">__description__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keys</span><span class="p">):</span>
+        <span class="c"># Remove plurals</span>
+        <span class="n">field_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s">&#39;s&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">keys</span> <span class="k">if</span> <span class="n">s</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">]</span>
+
+        <span class="c"># KML Placemark description template</span>
+        <span class="n">desc_tpl</span> <span class="o">=</span> <span class="s">&#39;&lt;h3&gt;{{x}}, {{y}}&lt;/h3&gt;&lt;h4&gt;{k1}: </span><span class="si">%s</span><span class="s"> {u1}&lt;h4&gt;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="s">&#39;{x}&#39;</span><span class="p">,</span>
+                <span class="n">y</span><span class="o">=</span><span class="s">&#39;{y}&#39;</span><span class="p">,</span> <span class="n">k1</span><span class="o">=</span><span class="n">field_names</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">u1</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">field_units</span><span class="p">[</span><span class="n">keys</span><span class="p">[</span><span class="mi">0</span><span class="p">]])</span>
+
+        <span class="c"># Sets up a new format string with field names and units e.g. &quot;Value: {value} ppm&quot;</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">desc_tpl</span> <span class="o">+=</span> <span class="s">&#39;&lt;h4&gt;{k2}: </span><span class="si">%s</span><span class="s"> {u2}&lt;h4&gt;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">k2</span><span class="o">=</span><span class="n">field_names</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                <span class="n">u2</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">field_units</span><span class="p">[</span><span class="n">keys</span><span class="p">[</span><span class="mi">1</span><span class="p">]])</span>
+
+            <span class="n">desc_tpl</span> <span class="o">=</span> <span class="n">desc_tpl</span> <span class="o">%</span> <span class="p">(</span><span class="s">&#39;{</span><span class="si">%s</span><span class="s">}&#39;</span> <span class="o">%</span> <span class="n">keys</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s">&#39;{</span><span class="si">%s</span><span class="s">}&#39;</span> <span class="o">%</span> <span class="n">keys</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">desc_tpl</span> <span class="o">=</span> <span class="n">desc_tpl</span> <span class="o">%</span> <span class="p">(</span><span class="s">&#39;{</span><span class="si">%s</span><span class="s">}&#39;</span> <span class="o">%</span> <span class="n">keys</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+        <span class="k">return</span> <span class="n">desc_tpl</span>
+
+    <span class="k">def</span> <span class="nf">__labels__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">breakpoints</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%.1f</span><span class="s">&#39;</span><span class="p">):</span>
+        <span class="n">bps</span> <span class="o">=</span> <span class="p">[</span><span class="n">bp</span> <span class="k">for</span> <span class="n">bp</span> <span class="ow">in</span> <span class="n">breakpoints</span> <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">bp</span><span class="p">)]</span>
+        <span class="n">labels</span> <span class="o">=</span> <span class="p">[(</span><span class="s">&#39;&lt;/= &#39;</span> <span class="o">+</span> <span class="n">fmt</span><span class="p">)</span> <span class="o">%</span> <span class="n">bps</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+
+        <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">while</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">bps</span><span class="p">):</span>
+            <span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s">&#39;(&#39;</span> <span class="o">+</span> <span class="n">fmt</span> <span class="o">+</span> <span class="s">&#39; - &#39;</span> <span class="o">+</span> <span class="n">fmt</span> <span class="o">+</span> <span class="s">&#39;]&#39;</span><span class="p">)</span> <span class="o">%</span> <span class="p">(</span><span class="n">bps</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">],</span> <span class="n">bps</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+            <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s">&#39;&gt; &#39;</span> <span class="o">+</span> <span class="n">fmt</span><span class="p">)</span> <span class="o">%</span> <span class="n">bps</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+
+        <span class="k">return</span> <span class="p">[(</span><span class="s">&#39;</span><span class="si">%s</span><span class="s"> &#39;</span> <span class="o">+</span> <span class="n">units</span><span class="p">)</span> <span class="o">%</span> <span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">labels</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__legend__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dimensions</span><span class="p">,</span> <span class="n">style</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">x_fraction</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">y_fraction</span><span class="o">=</span><span class="mf">0.95</span><span class="p">):</span>
+        <span class="n">dim</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">dimensions</span><span class="p">)</span>
+
+        <span class="c"># Note: KML does not use SVG, matplotlib drawing orientation; instead,</span>
+        <span class="c">#   fractional position is measured from the bottom left corner</span>
+        <span class="k">return</span> <span class="n">KML</span><span class="o">.</span><span class="n">ScreenOverlay</span><span class="p">(</span>
+            <span class="n">KML</span><span class="o">.</span><span class="n">name</span><span class="p">(</span><span class="s">&#39;Legend&#39;</span><span class="p">),</span>
+            <span class="n">KML</span><span class="o">.</span><span class="n">overlayXY</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">x_fraction</span><span class="p">),</span> <span class="n">y</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">y_fraction</span><span class="p">),</span> <span class="n">xunits</span><span class="o">=</span><span class="s">&#39;fraction&#39;</span><span class="p">,</span> <span class="n">yunits</span><span class="o">=</span><span class="s">&#39;fraction&#39;</span><span class="p">),</span>
+            <span class="n">KML</span><span class="o">.</span><span class="n">screenXY</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="s">&#39;0&#39;</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s">&#39;1&#39;</span><span class="p">,</span> <span class="n">xunits</span><span class="o">=</span><span class="s">&#39;fraction&#39;</span><span class="p">,</span> <span class="n">yunits</span><span class="o">=</span><span class="s">&#39;fraction&#39;</span><span class="p">),</span>
+            <span class="n">KML</span><span class="o">.</span><span class="n">rotationXY</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="s">&#39;0&#39;</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s">&#39;0&#39;</span><span class="p">,</span> <span class="n">xunits</span><span class="o">=</span><span class="s">&#39;fraction&#39;</span><span class="p">,</span> <span class="n">yunits</span><span class="o">=</span><span class="s">&#39;fraction&#39;</span><span class="p">),</span>
+            <span class="n">KML</span><span class="o">.</span><span class="n">Icon</span><span class="p">(</span><span class="n">KML</span><span class="o">.</span><span class="n">href</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">path</span><span class="p">))),</span>
+            <span class="n">KML</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="n">dim</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">y</span><span class="o">=</span><span class="n">dim</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">xunits</span><span class="o">=</span><span class="s">&#39;pixels&#39;</span><span class="p">,</span> <span class="n">yunits</span><span class="o">=</span><span class="s">&#39;pixels&#39;</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">__style__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;#</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__square_bounds__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coords</span><span class="p">,</span> <span class="n">altitude</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="c"># For this gridded product, assume square cells; get grid cell resolution</span>
+        <span class="n">grid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">grid</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;x&#39;</span><span class="p">)</span>
+
+        <span class="c"># Get the rectangular bounds of the model cell at the grid resolution</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">coords</span><span class="p">)):</span>
+            <span class="n">bounds</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">Point</span><span class="p">(</span><span class="n">coords</span><span class="p">)</span><span class="o">.</span><span class="n">buffer</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span><span class="o">.</span><span class="n">bounds</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span> <span class="c"># Skip NaNs</span>
+
+        <span class="c"># Coordinates should be specified counter-clockwise</span>
+        <span class="c"># (https://developers.google.com/kml/documentation/kmlreference#polygon)</span>
+        <span class="c"># Permute corner creation from bounds; bounds=(minx, miny, maxx, maxy)</span>
+        <span class="n">coords</span> <span class="o">=</span> <span class="p">((</span><span class="n">bounds</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">bounds</span><span class="p">[</span><span class="mi">3</span><span class="p">]),</span> <span class="p">(</span><span class="n">bounds</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">bounds</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+            <span class="p">(</span><span class="n">bounds</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">bounds</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="p">(</span><span class="n">bounds</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">bounds</span><span class="p">[</span><span class="mi">3</span><span class="p">]),</span>
+            <span class="p">(</span><span class="n">bounds</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">bounds</span><span class="p">[</span><span class="mi">3</span><span class="p">]))</span>
+
+        <span class="k">if</span> <span class="n">altitude</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">coords</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="p">(</span><span class="n">c</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">c</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="nb">str</span><span class="p">(</span><span class="n">altitude</span><span class="p">)),</span> <span class="n">coords</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="s">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="s">&#39;,&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">c</span><span class="p">),</span> <span class="n">coords</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">__tour__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># Define a variable for the Google Extensions namespace URL string</span>
+        <span class="n">gxns</span> <span class="o">=</span> <span class="s">&#39;{&#39;</span> <span class="o">+</span> <span class="n">nsmap</span><span class="p">[</span><span class="s">&#39;gx&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="s">&#39;}&#39;</span>
+
+        <span class="n">tour</span> <span class="o">=</span> <span class="n">GX</span><span class="o">.</span><span class="n">Tour</span><span class="p">(</span><span class="n">KML</span><span class="o">.</span><span class="n">name</span><span class="p">(</span><span class="s">&#39;Play me!&#39;</span><span class="p">),</span> <span class="n">GX</span><span class="o">.</span><span class="n">Playlist</span><span class="p">())</span>
+
+        <span class="n">tour</span><span class="o">.</span><span class="n">Playlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">GX</span><span class="o">.</span><span class="n">FlyTo</span><span class="p">(</span>
+            <span class="n">GX</span><span class="o">.</span><span class="n">duration</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span>
+            <span class="n">GX</span><span class="o">.</span><span class="n">flyToMode</span><span class="p">(</span><span class="s">&#39;smooth&#39;</span><span class="p">),</span>
+            <span class="n">KML</span><span class="o">.</span><span class="n">LookAt</span><span class="p">(</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">longitude</span><span class="p">(</span><span class="o">-</span><span class="mi">45</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">latitude</span><span class="p">(</span><span class="o">-</span><span class="mi">43</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">altitude</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">heading</span><span class="p">(</span><span class="mi">355</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">tilt</span><span class="p">(</span><span class="mi">55</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">range</span><span class="p">(</span><span class="mf">6000000.0</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">altitudeMode</span><span class="p">(</span><span class="s">&#39;absolute&#39;</span><span class="p">))))</span>
+
+        <span class="n">tour</span><span class="o">.</span><span class="n">Playlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">GX</span><span class="o">.</span><span class="n">FlyTo</span><span class="p">(</span>
+            <span class="n">GX</span><span class="o">.</span><span class="n">duration</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span>
+            <span class="n">GX</span><span class="o">.</span><span class="n">flyToMode</span><span class="p">(</span><span class="s">&#39;smooth&#39;</span><span class="p">),</span>
+            <span class="n">KML</span><span class="o">.</span><span class="n">LookAt</span><span class="p">(</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">longitude</span><span class="p">(</span><span class="o">-</span><span class="mi">80</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">latitude</span><span class="p">(</span><span class="mi">63</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">altitude</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">heading</span><span class="p">(</span><span class="mi">345</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">tilt</span><span class="p">(</span><span class="mi">45</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">range</span><span class="p">(</span><span class="mf">10000000.0</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">altitudeMode</span><span class="p">(</span><span class="s">&#39;absolute&#39;</span><span class="p">))))</span>
+
+        <span class="n">tour</span><span class="o">.</span><span class="n">Playlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">GX</span><span class="o">.</span><span class="n">FlyTo</span><span class="p">(</span>
+            <span class="n">GX</span><span class="o">.</span><span class="n">duration</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span>
+            <span class="n">GX</span><span class="o">.</span><span class="n">flyToMode</span><span class="p">(</span><span class="s">&#39;smooth&#39;</span><span class="p">),</span>
+            <span class="n">KML</span><span class="o">.</span><span class="n">LookAt</span><span class="p">(</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">longitude</span><span class="p">(</span><span class="o">-</span><span class="mi">131</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">latitude</span><span class="p">(</span><span class="mi">63</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">altitude</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">heading</span><span class="p">(</span><span class="mi">345</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">tilt</span><span class="p">(</span><span class="mi">35</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">range</span><span class="p">(</span><span class="mf">20000000.0</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">altitudeMode</span><span class="p">(</span><span class="s">&#39;absolute&#39;</span><span class="p">))))</span>
+
+        <span class="n">tour</span><span class="o">.</span><span class="n">Playlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">GX</span><span class="o">.</span><span class="n">FlyTo</span><span class="p">(</span>
+            <span class="n">GX</span><span class="o">.</span><span class="n">duration</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span>
+            <span class="n">GX</span><span class="o">.</span><span class="n">flyToMode</span><span class="p">(</span><span class="s">&#39;smooth&#39;</span><span class="p">),</span>
+            <span class="n">KML</span><span class="o">.</span><span class="n">LookAt</span><span class="p">(</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">longitude</span><span class="p">(</span><span class="mi">53</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">latitude</span><span class="p">(</span><span class="mi">25</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">altitude</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">heading</span><span class="p">(</span><span class="mi">270</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">tilt</span><span class="p">(</span><span class="mi">35</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">range</span><span class="p">(</span><span class="mf">20000000.0</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">altitudeMode</span><span class="p">(</span><span class="s">&#39;absolute&#39;</span><span class="p">))))</span>
+
+        <span class="n">tour</span><span class="o">.</span><span class="n">Playlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">GX</span><span class="o">.</span><span class="n">FlyTo</span><span class="p">(</span>
+            <span class="n">GX</span><span class="o">.</span><span class="n">duration</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span>
+            <span class="n">GX</span><span class="o">.</span><span class="n">flyToMode</span><span class="p">(</span><span class="s">&#39;smooth&#39;</span><span class="p">),</span>
+            <span class="n">KML</span><span class="o">.</span><span class="n">LookAt</span><span class="p">(</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">longitude</span><span class="p">(</span><span class="mi">140</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">latitude</span><span class="p">(</span><span class="o">-</span><span class="mi">4</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">altitude</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">heading</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">tilt</span><span class="p">(</span><span class="mi">55</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">range</span><span class="p">(</span><span class="mf">10000000.0</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">altitudeMode</span><span class="p">(</span><span class="s">&#39;absolute&#39;</span><span class="p">))))</span>
+
+        <span class="k">return</span> <span class="n">tour</span>
+
+    <span class="k">def</span> <span class="nf">__query__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query_object</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">mediator</span><span class="o">.</span><span class="n">load_from_db</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">collection_name</span><span class="p">,</span> <span class="n">query_object</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="AbstractScoreView"><a class="viewcode-back" href="../../index.html#fluxpy.outputs.AbstractScoreView">[docs]</a><span class="k">class</span> <span class="nc">AbstractScoreView</span><span class="p">(</span><span class="n">AbstractGridView</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    An abstract class of outputs based on standard scores (z scores).</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__labels__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sigmas</span><span class="p">,</span> <span class="n">clamped</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Create legend labels for standard scores (z scores)&#39;&#39;&#39;</span>
+        <span class="n">labels</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c"># e.g. create [-2, -1, 0, 1, 2] for sigmas=2</span>
+        <span class="n">bins</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="o">-</span><span class="n">sigmas</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">bins</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="p">(</span><span class="n">sigmas</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)))</span>
+
+        <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="n">bins</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">value</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;z Score: +</span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">value</span><span class="p">)</span>
+
+            <span class="k">elif</span> <span class="n">value</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;Mean&#39;</span><span class="p">)</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;z Score: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">value</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">clamped</span><span class="p">:</span>
+            <span class="n">labels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;&lt;/= </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">labels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">labels</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;&gt;/= </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">labels</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">labels</span>
+
+    <span class="k">def</span> <span class="nf">__style__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">score</span><span class="p">,</span> <span class="n">color</span><span class="p">):</span>
+        <span class="n">num_score_classes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">colors</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">color</span><span class="p">)</span><span class="o">.</span><span class="n">score_length</span>
+
+        <span class="c"># Calculates the style ID of the color to use</span>
+        <span class="k">if</span> <span class="n">score</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">color</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s">+&#39;</span> <span class="o">%</span> <span class="n">color</span>
+
+        <span class="c"># If the number of standard deviations is outside the number of classes</span>
+        <span class="c">#   provided, clamp the style to the highest (or lowest) class</span>
+        <span class="k">if</span> <span class="n">num_score_classes</span> <span class="o">&lt;=</span> <span class="nb">abs</span><span class="p">(</span><span class="n">score</span><span class="p">):</span>
+            <span class="n">score</span> <span class="o">=</span> <span class="p">(</span><span class="n">score</span> <span class="o">*</span> <span class="n">num_score_classes</span><span class="p">)</span> <span class="o">/</span> <span class="nb">abs</span><span class="p">(</span><span class="n">score</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">(</span><span class="s">&#39;#</span><span class="si">%s%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">color</span><span class="p">,</span> <span class="n">score</span><span class="p">))</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">__scores__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">series</span><span class="p">):</span>
+        <span class="c"># Calculates z scores for a given series</span>
+        <span class="n">mean</span> <span class="o">=</span> <span class="n">series</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+        <span class="n">std</span> <span class="o">=</span> <span class="n">series</span><span class="o">.</span><span class="n">std</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">series</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="n">std</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="KMZWrapper"><a class="viewcode-back" href="../../index.html#fluxpy.outputs.KMZWrapper">[docs]</a><span class="k">class</span> <span class="nc">KMZWrapper</span><span class="p">:</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Generates a Zipped KML; a ZIP archive with KML files and dependencies (e.g.</span>
+<span class="sd">    image overlays, icons) inside.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">kml_kmz_matcher</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">r&#39;.+\.(kml|kmz)$&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_path</span><span class="p">,</span> <span class="n">kml_file</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_path</span> <span class="o">=</span> <span class="n">output_path</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">file_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">kml_file</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kml_file</span> <span class="o">=</span> <span class="n">kml_file</span>
+
+    <span class="k">def</span> <span class="nf">__add_path__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">kml_kmz_matcher</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">archive</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file_path</span><span class="p">,</span> <span class="n">path</span><span class="p">),</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">render</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_path</span><span class="o">=</span><span class="s">&#39;./output.kmz&#39;</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_path</span> <span class="o">=</span> <span class="n">output_path</span>
+
+        <span class="k">with</span> <span class="n">ZipFile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_path</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">,</span> <span class="n">ZIP_DEFLATED</span><span class="p">)</span> <span class="k">as</span> <span class="bp">self</span><span class="o">.</span><span class="n">archive</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">archive</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kml_file</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kml_file</span><span class="p">))</span>
+
+            <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file_path</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__add_path__</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Legend"><a class="viewcode-back" href="../../index.html#fluxpy.outputs.Legend">[docs]</a><span class="k">class</span> <span class="nc">Legend</span><span class="p">:</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    A legend for a classification scale based on colored parcels. The entries</span>
+<span class="sd">    are drawn as square cells in a vertical list.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">entries</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s">&#39;.&#39;</span><span class="p">,</span> <span class="n">scale_name</span><span class="o">=</span><span class="s">&#39;legend&#39;</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bg_color</span> <span class="o">=</span> <span class="s">&#39;#000000&#39;</span>
+
+        <span class="c"># Pad the legend entries to keep them the right size</span>
+        <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">entries</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">11</span><span class="p">:</span>
+            <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">bg_color</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">))</span>
+
+        <span class="c"># Unzip a sequence of (color, label) tuples</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">colors</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">entries</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dpi</span> <span class="o">=</span> <span class="mf">92.0</span> <span class="c"># Should be float</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">width</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dpi</span> <span class="o">*</span> <span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="c"># e.g. 2.0 inches</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">height</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dpi</span> <span class="o">*</span> <span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="c"># e.g. 5.0 inches</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">figure</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">axis</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">file_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s">.png&#39;</span> <span class="o">%</span> <span class="n">scale_name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">figure</span><span class="o">.</span><span class="n">set_tight_layout</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">figure</span><span class="o">.</span><span class="n">set_size_inches</span><span class="p">(</span><span class="o">*</span><span class="n">size</span><span class="p">)</span>
+
+        <span class="c"># Reverse the labels and color order; the drawing process is backwards</span>
+        <span class="c">#   from intuition</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">labels</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">colors</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">colors</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+        <span class="c"># Supress warnings about these axes and the tight layout</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">filterwarnings</span><span class="p">(</span><span class="s">&#39;ignore&#39;</span><span class="p">,</span> <span class="s">r&#39;.*tight_layout.*&#39;</span><span class="p">,</span>
+            <span class="ne">UserWarning</span><span class="p">,</span> <span class="s">r&#39;.*figure.*&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__label__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">xy</span><span class="p">,</span> <span class="n">text</span><span class="p">,</span> <span class="n">x_offset</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="c"># Calls a text label on the plot</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="n">xy</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="p">(</span><span class="n">x_offset</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">dpi</span><span class="p">),</span> <span class="n">xy</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">text</span><span class="p">,</span> <span class="n">ha</span><span class="o">=</span><span class="s">&#39;left&#39;</span><span class="p">,</span> <span class="n">va</span><span class="o">=</span><span class="s">&#39;bottom&#39;</span><span class="p">,</span>
+            <span class="n">family</span><span class="o">=</span><span class="s">&#39;sans-serif&#39;</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">13</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;#ffffff&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Legend.render"><a class="viewcode-back" href="../../index.html#fluxpy.outputs.Legend.render">[docs]</a>    <span class="k">def</span> <span class="nf">render</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">patch_size</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">x_offset</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Draws the legend graphic and saves it to a file.&#39;&#39;&#39;</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">colors</span><span class="p">)</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="n">patch_size</span>
+
+        <span class="c"># This offset is transformed to &quot;data&quot; coordinates (inches)</span>
+        <span class="n">left_offset</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="n">s</span> <span class="o">*</span> <span class="mf">1.5</span><span class="p">)</span> <span class="o">-</span> <span class="p">(</span><span class="n">x_offset</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">dpi</span><span class="p">)</span>
+
+        <span class="c"># Create grid to plot the artists</span>
+        <span class="n">grid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="o">-</span><span class="n">n</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="n">left_offset</span><span class="p">,</span> <span class="mf">1.1</span><span class="p">,</span> <span class="s">&#39;Legend&#39;</span><span class="p">,</span> <span class="n">family</span><span class="o">=</span><span class="s">&#39;sans-serif&#39;</span><span class="p">,</span>
+            <span class="n">size</span><span class="o">=</span><span class="mi">14</span><span class="p">,</span> <span class="n">weight</span><span class="o">=</span><span class="s">&#39;bold&#39;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;#ffffff&#39;</span><span class="p">)</span>
+
+        <span class="n">patches</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+            <span class="c"># Add a rectangle</span>
+            <span class="n">rect</span> <span class="o">=</span> <span class="n">mpatches</span><span class="o">.</span><span class="n">Rectangle</span><span class="p">(</span><span class="n">grid</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">s</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">ec</span><span class="o">=</span><span class="s">&#39;none&#39;</span><span class="p">)</span>
+            <span class="n">patches</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rect</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__label__</span><span class="p">(</span><span class="n">grid</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">x_offset</span><span class="p">)</span>
+
+        <span class="n">collection</span> <span class="o">=</span> <span class="n">PatchCollection</span><span class="p">(</span><span class="n">patches</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="n">alpha</span><span class="p">)</span>
+
+        <span class="c"># Space the patches and the text labels</span>
+        <span class="n">collection</span><span class="o">.</span><span class="n">set_offset_position</span><span class="p">(</span><span class="s">&#39;data&#39;</span><span class="p">)</span>
+        <span class="n">collection</span><span class="o">.</span><span class="n">set_offsets</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>
+            <span class="p">[</span><span class="n">left_offset</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="p">]))</span>
+
+        <span class="n">collection</span><span class="o">.</span><span class="n">set_facecolors</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">colors</span><span class="p">)</span>
+        <span class="c">#collection.set_edgecolor(&#39;#ffffff&#39;) # Draw color for box outlines</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">add_collection</span><span class="p">(</span><span class="n">collection</span><span class="p">)</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">axis</span><span class="p">(</span><span class="s">&#39;equal&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">axis</span><span class="p">(</span><span class="s">&#39;off&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file_path</span><span class="p">,</span> <span class="n">facecolor</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bg_color</span><span class="p">,</span> <span class="n">dpi</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dpi</span><span class="p">,</span>
+            <span class="n">pad_inches</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_path</span>
+
+</div></div>
+<div class="viewcode-block" id="StaticKMLView"><a class="viewcode-back" href="../../index.html#fluxpy.outputs.StaticKMLView">[docs]</a><span class="k">class</span> <span class="nc">StaticKMLView</span><span class="p">(</span><span class="n">AbstractGridView</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Writes out KML files from spatio-temporal data provided by a Mediator.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+
+<div class="viewcode-block" id="StaticKMLView.render"><a class="viewcode-back" href="../../index.html#fluxpy.outputs.StaticKMLView.render">[docs]</a>    <span class="k">def</span> <span class="nf">render</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">,</span> <span class="n">output_path</span><span class="p">,</span> <span class="n">keys</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;values&#39;</span><span class="p">,</span> <span class="s">&#39;errors&#39;</span><span class="p">),</span>
+            <span class="n">bins</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;BrBG11&#39;</span><span class="p">,</span> <span class="n">vscale</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">vpow</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">cutoffs</span><span class="o">=</span><span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="mf">1.2</span><span class="p">)):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Generates a KML view of gridded, 3D data using up to two fields,</span>
+<span class="sd">        given by the dictionary keys, in the connected data e.g. the first</span>
+<span class="sd">        field will be used to encode color and the second field to encode the</span>
+<span class="sd">        KML Polygon extrusion height. Assumes that each grid cell has a</span>
+<span class="sd">        single longitude-latitude pair describing its centroid. The keys</span>
+<span class="sd">        argument is a sequence of strings representing field names to use for</span>
+<span class="sd">        these symbols, in order: the polygon style, the altitude.</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">file_paths</span> <span class="o">=</span> <span class="p">[]</span> <span class="c"># Remember all files that may need to be bundled in KMZ</span>
+        <span class="n">scale</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">colors</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">color</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">output_path</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;The specified output_path does not exist or cannot be read&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">bins</span> <span class="o">&gt;</span> <span class="mi">9</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Cannot have more than 9 bins in sequential scales&#39;</span><span class="p">)</span>
+
+        <span class="c"># Get field names</span>
+        <span class="n">f1</span><span class="p">,</span> <span class="n">f2</span> <span class="o">=</span> <span class="n">keys</span>
+
+        <span class="c"># Get the &lt;description&gt; element template</span>
+        <span class="n">desc_tpl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__description__</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span>
+
+        <span class="c"># Execute the query</span>
+        <span class="n">dfs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__query__</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+
+        <span class="c"># Parse out the identifier and the DataFrame</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span> <span class="c"># Iterate through the returned DataFrames</span>
+        <span class="k">for</span> <span class="n">ident</span><span class="p">,</span> <span class="n">df</span> <span class="ow">in</span> <span class="n">dfs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">placemarks</span> <span class="o">=</span> <span class="p">[]</span> <span class="c"># Initial container</span>
+
+            <span class="c"># Get breakpoints, labels based on the requested number of bins</span>
+            <span class="n">breakpoints</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__breakpoints__</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="n">f1</span><span class="p">],</span> <span class="n">bins</span><span class="p">)</span>
+            <span class="n">labels</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__labels__</span><span class="p">(</span><span class="n">breakpoints</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">field_units</span><span class="p">[</span><span class="n">f1</span><span class="p">])</span>
+
+            <span class="c"># Bin each value based on the breakpoints; format the labels</span>
+            <span class="n">df</span><span class="p">[</span><span class="s">&#39;bin&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">cut</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="n">f1</span><span class="p">],</span> <span class="n">breakpoints</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">labels</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">scale</span><span class="p">,</span> <span class="n">DivergingColors</span><span class="p">):</span>
+                <span class="n">labels</span> <span class="o">=</span> <span class="n">labels</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="c"># Reverse</span>
+
+            <span class="c"># Generate a legend graphic and get the &lt;ScreenOverlay&gt; element for such a graphic</span>
+            <span class="n">legend</span> <span class="o">=</span> <span class="n">Legend</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">legend_size</span><span class="p">,</span> <span class="nb">zip</span><span class="p">(</span><span class="n">scale</span><span class="o">.</span><span class="n">hex_colors</span><span class="p">(),</span> <span class="n">labels</span><span class="p">),</span>
+                <span class="n">output_path</span><span class="p">,</span> <span class="n">ident</span><span class="p">)</span>
+
+            <span class="c"># Iterate through the rows of the Data Frame</span>
+            <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">series</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+
+                <span class="k">if</span> <span class="n">f2</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                    <span class="n">coords</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__square_bounds__</span><span class="p">((</span><span class="n">series</span><span class="p">[</span><span class="s">&#39;x&#39;</span><span class="p">],</span> <span class="n">series</span><span class="p">[</span><span class="s">&#39;y&#39;</span><span class="p">]),</span>
+                        <span class="n">math</span><span class="o">.</span><span class="n">pow</span><span class="p">(</span><span class="n">series</span><span class="p">[</span><span class="n">f2</span><span class="p">]</span> <span class="o">*</span> <span class="n">vscale</span><span class="p">,</span> <span class="n">vpow</span><span class="p">))</span> <span class="c"># Altitude</span>
+
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">coords</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__square_bounds__</span><span class="p">((</span><span class="n">series</span><span class="p">[</span><span class="s">&#39;x&#39;</span><span class="p">],</span> <span class="n">series</span><span class="p">[</span><span class="s">&#39;y&#39;</span><span class="p">]))</span>
+
+                <span class="k">if</span> <span class="n">coords</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                    <span class="k">continue</span>
+
+                <span class="n">placemarks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">KML</span><span class="o">.</span><span class="n">Placemark</span><span class="p">(</span>
+                    <span class="n">KML</span><span class="o">.</span><span class="n">description</span><span class="p">(</span><span class="n">desc_tpl</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">**</span><span class="nb">dict</span><span class="p">(</span><span class="n">series</span><span class="p">))),</span>
+                    <span class="n">KML</span><span class="o">.</span><span class="n">styleUrl</span><span class="p">(</span><span class="s">&#39;#</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">series</span><span class="p">[</span><span class="s">&#39;bin&#39;</span><span class="p">]),</span>
+                    <span class="n">KML</span><span class="o">.</span><span class="n">Polygon</span><span class="p">(</span>
+                        <span class="n">KML</span><span class="o">.</span><span class="n">extrude</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+                        <span class="n">KML</span><span class="o">.</span><span class="n">altitudeMode</span><span class="p">(</span><span class="s">&#39;absolute&#39;</span><span class="p">),</span>
+                        <span class="n">KML</span><span class="o">.</span><span class="n">outerBoundaryIs</span><span class="p">(</span>
+                            <span class="n">KML</span><span class="o">.</span><span class="n">LinearRing</span><span class="p">(</span>
+                                <span class="n">KML</span><span class="o">.</span><span class="n">coordinates</span><span class="p">(</span><span class="o">*</span><span class="n">coords</span><span class="p">))))))</span>
+
+            <span class="n">preamble</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">scale</span><span class="o">.</span><span class="n">kml_styles</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">outlines</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">alpha</span><span class="p">))</span>
+            <span class="n">preamble</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">KML</span><span class="o">.</span><span class="n">name</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">collection_name</span><span class="p">))</span>
+
+            <span class="c"># Add the legends and the &lt;Folder&gt; element with &lt;Placemarks&gt;</span>
+            <span class="n">preamble</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__tour__</span><span class="p">(),</span>
+                <span class="c"># Calculate the legend image dimensions based on its size in inches and the DPI</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__legend__</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span> <span class="o">*</span> <span class="n">legend</span><span class="o">.</span><span class="n">dpi</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">legend_size</span><span class="p">),</span>
+                    <span class="n">color</span><span class="p">,</span> <span class="n">legend</span><span class="o">.</span><span class="n">file_path</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">Folder</span><span class="p">(</span><span class="n">KML</span><span class="o">.</span><span class="n">name</span><span class="p">(</span><span class="n">ident</span><span class="p">),</span> <span class="o">*</span><span class="n">placemarks</span><span class="p">)</span>
+            <span class="p">])</span>
+
+            <span class="n">doc</span> <span class="o">=</span> <span class="n">KML</span><span class="o">.</span><span class="n">Document</span><span class="p">(</span><span class="o">*</span><span class="n">preamble</span><span class="p">)</span>
+
+            <span class="n">output_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">output_path</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">filename_pattern</span> <span class="o">%</span> <span class="p">(</span><span class="n">ident</span><span class="p">,</span> <span class="n">i</span><span class="p">))</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_name</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">stream</span><span class="p">:</span>
+                <span class="n">stream</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">etree</span><span class="o">.</span><span class="n">tostring</span><span class="p">(</span><span class="n">doc</span><span class="p">))</span>
+
+            <span class="n">file_paths</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">output_name</span><span class="p">,</span> <span class="n">legend</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">x_offset</span><span class="o">=</span><span class="mi">150</span><span class="p">)))</span>
+
+            <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">return</span> <span class="n">file_paths</span>
+
+</div></div>
+<div class="viewcode-block" id="ScoredKMLView"><a class="viewcode-back" href="../../index.html#fluxpy.outputs.ScoredKMLView">[docs]</a><span class="k">class</span> <span class="nc">ScoredKMLView</span><span class="p">(</span><span class="n">AbstractScoreView</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Writes out KML files from spatio-temporal data provided by a Mediator</span>
+<span class="sd">    where the values represented in the KML are standard scores (z scores).</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">colors</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">([(</span><span class="n">n</span><span class="p">,</span> <span class="n">DivergingColors</span><span class="p">(</span><span class="n">n</span><span class="p">))</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">COLORS</span><span class="o">.</span><span class="n">keys</span><span class="p">()])</span>
+
+    <span class="k">def</span> <span class="nf">__legend_vertical__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">origin</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">vscale</span><span class="o">=</span><span class="mi">100000</span><span class="p">):</span>
+        <span class="c"># Generate a vertical legend for error</span>
+        <span class="n">elements</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">z</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">while</span> <span class="n">z</span> <span class="o">&lt;=</span> <span class="n">levels</span><span class="p">:</span>
+            <span class="c"># Assumes that 1 unit height (vscale) is the mean error</span>
+            <span class="n">elements</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">KML</span><span class="o">.</span><span class="n">Placemark</span><span class="p">(</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">name</span><span class="p">(</span><span class="s">&#39;+</span><span class="si">%d</span><span class="s"> z Score&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">z</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="k">if</span> <span class="n">z</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="s">&#39;Mean Error&#39;</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">Style</span><span class="p">(</span>
+                    <span class="n">KML</span><span class="o">.</span><span class="n">IconStyle</span><span class="p">(</span>
+                        <span class="n">KML</span><span class="o">.</span><span class="n">Icon</span><span class="p">(</span>
+                            <span class="n">KML</span><span class="o">.</span><span class="n">href</span><span class="p">(</span><span class="s">&#39;http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png&#39;</span><span class="p">)))),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">Point</span><span class="p">(</span>
+                    <span class="n">KML</span><span class="o">.</span><span class="n">extrude</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+                    <span class="n">KML</span><span class="o">.</span><span class="n">altitudeMode</span><span class="p">(</span><span class="s">&#39;absolute&#39;</span><span class="p">),</span>
+                    <span class="n">KML</span><span class="o">.</span><span class="n">coordinates</span><span class="p">((</span><span class="s">&#39;</span><span class="si">%d</span><span class="s">,</span><span class="si">%d</span><span class="s">,&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">origin</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">z</span><span class="p">,</span>
+                        <span class="n">origin</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">z</span> <span class="o">*</span> <span class="n">vscale</span><span class="p">)))))</span>
+            <span class="n">z</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">return</span> <span class="n">elements</span>
+
+<div class="viewcode-block" id="ScoredKMLView.render"><a class="viewcode-back" href="../../index.html#fluxpy.outputs.ScoredKMLView.render">[docs]</a>    <span class="k">def</span> <span class="nf">render</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">,</span> <span class="n">output_path</span><span class="p">,</span> <span class="n">keys</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;values&#39;</span><span class="p">,</span> <span class="s">&#39;errors&#39;</span><span class="p">),</span>
+            <span class="n">color</span><span class="o">=</span><span class="s">&#39;dBrBG11&#39;</span><span class="p">,</span> <span class="n">vscale</span><span class="o">=</span><span class="mi">100000</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Generates a KML view of gridded, 3D data with standard scores (z scores)</span>
+<span class="sd">        using up to two fields, given by the dictionary keys, in the connected </span>
+<span class="sd">        data e.g. the first field will be used to encode color and the second</span>
+<span class="sd">        field to encode the KML Polygon extrusion height. Assumes that each grid</span>
+<span class="sd">        cell has a single longitude-latitude pair describing its centroid.</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">file_paths</span> <span class="o">=</span> <span class="p">[]</span> <span class="c"># Remember all files that may need to be bundled in KMZ</span>
+        <span class="n">scale</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">colors</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">color</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">output_path</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;The specified output_path does not exist or cannot be read&#39;</span><span class="p">)</span>
+
+        <span class="c"># Get field names</span>
+        <span class="n">f1</span><span class="p">,</span> <span class="n">f2</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="s">&#39;z</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">x</span><span class="p">,</span> <span class="n">keys</span><span class="p">)</span>
+
+        <span class="c"># Get the &lt;description&gt; element template</span>
+        <span class="n">desc_tpl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__description__</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span>
+
+        <span class="c"># Execute the query</span>
+        <span class="n">dfs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__query__</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+
+        <span class="c"># Parse out the identifier and the DataFrame</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span> <span class="c"># Iterate through the returned DataFrames</span>
+        <span class="k">for</span> <span class="n">ident</span><span class="p">,</span> <span class="n">df</span> <span class="ow">in</span> <span class="n">dfs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">placemarks</span> <span class="o">=</span> <span class="p">[]</span> <span class="c"># Initial container</span>
+
+            <span class="c"># Calculate z scores for the values</span>
+            <span class="n">df</span><span class="p">[</span><span class="n">f1</span><span class="p">]</span> <span class="o">=</span> <span class="n">s1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__scores__</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="n">keys</span><span class="p">[</span><span class="mi">0</span><span class="p">]])</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">)</span>
+            <span class="n">df</span><span class="p">[</span><span class="n">f2</span><span class="p">]</span> <span class="o">=</span> <span class="n">s2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__scores__</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="n">keys</span><span class="p">[</span><span class="mi">1</span><span class="p">]])</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">1</span><span class="p">)</span>
+
+            <span class="c"># Get z score labels</span>
+            <span class="n">labels</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__labels__</span><span class="p">(</span><span class="n">scale</span><span class="o">.</span><span class="n">score_length</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="o">.</span><span class="n">unique</span><span class="p">())</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">scale</span><span class="p">))</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">scale</span><span class="p">,</span> <span class="n">DivergingColors</span><span class="p">):</span>
+                <span class="n">labels</span> <span class="o">=</span> <span class="n">labels</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="c"># Reverse</span>
+
+            <span class="c"># Generate a legend graphic and get the &lt;ScreenOverlay&gt; element for such a graphic</span>
+            <span class="n">legend</span> <span class="o">=</span> <span class="n">Legend</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">legend_size</span><span class="p">,</span> <span class="nb">zip</span><span class="p">(</span><span class="n">scale</span><span class="o">.</span><span class="n">hex_colors</span><span class="p">(),</span> <span class="n">labels</span><span class="p">),</span>
+                <span class="n">output_path</span><span class="p">,</span> <span class="n">color</span><span class="p">)</span>
+
+            <span class="c"># Iterate through the rows of the Data Frame</span>
+            <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">series</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+
+                <span class="n">coords</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__square_bounds__</span><span class="p">((</span><span class="n">series</span><span class="p">[</span><span class="s">&#39;x&#39;</span><span class="p">],</span> <span class="n">series</span><span class="p">[</span><span class="s">&#39;y&#39;</span><span class="p">]),</span>
+                    <span class="p">(</span><span class="n">series</span><span class="p">[</span><span class="n">f2</span><span class="p">]</span> <span class="o">*</span> <span class="n">vscale</span><span class="p">))</span> <span class="c"># Altitude</span>
+
+                <span class="n">placemarks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">KML</span><span class="o">.</span><span class="n">Placemark</span><span class="p">(</span>
+                    <span class="n">KML</span><span class="o">.</span><span class="n">description</span><span class="p">(</span><span class="n">desc_tpl</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">**</span><span class="nb">dict</span><span class="p">(</span><span class="n">series</span><span class="p">))),</span>
+                    <span class="n">KML</span><span class="o">.</span><span class="n">styleUrl</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__style__</span><span class="p">(</span><span class="n">series</span><span class="p">[</span><span class="n">f1</span><span class="p">],</span> <span class="n">color</span><span class="p">)),</span>
+                    <span class="n">KML</span><span class="o">.</span><span class="n">Polygon</span><span class="p">(</span>
+                        <span class="n">KML</span><span class="o">.</span><span class="n">extrude</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+                        <span class="n">KML</span><span class="o">.</span><span class="n">altitudeMode</span><span class="p">(</span><span class="s">&#39;absolute&#39;</span><span class="p">),</span>
+                        <span class="n">KML</span><span class="o">.</span><span class="n">outerBoundaryIs</span><span class="p">(</span>
+                            <span class="n">KML</span><span class="o">.</span><span class="n">LinearRing</span><span class="p">(</span>
+                                <span class="n">KML</span><span class="o">.</span><span class="n">coordinates</span><span class="p">(</span><span class="o">*</span><span class="n">coords</span><span class="p">))))))</span>
+
+            <span class="n">preamble</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">scale</span><span class="o">.</span><span class="n">kml_styles</span><span class="p">(</span><span class="n">outlines</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">alpha</span><span class="p">))</span>
+            <span class="n">preamble</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">KML</span><span class="o">.</span><span class="n">name</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">collection_name</span><span class="p">))</span>
+
+            <span class="c"># Add the legends and the &lt;Folder&gt; element with &lt;Placemarks&gt;</span>
+            <span class="n">preamble</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__legend_vertical__</span><span class="p">(</span><span class="n">vscale</span><span class="o">=</span><span class="n">vscale</span><span class="p">))</span>
+            <span class="n">preamble</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span>
+                <span class="c"># Calculate the legend image dimensions based on its size in inches and the DPI</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__legend__</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span> <span class="o">*</span> <span class="n">legend</span><span class="o">.</span><span class="n">dpi</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">legend_size</span><span class="p">),</span>
+                    <span class="n">color</span><span class="p">,</span> <span class="n">legend</span><span class="o">.</span><span class="n">file_path</span><span class="p">),</span>
+                <span class="n">KML</span><span class="o">.</span><span class="n">Folder</span><span class="p">(</span><span class="n">KML</span><span class="o">.</span><span class="n">name</span><span class="p">(</span><span class="n">ident</span><span class="p">),</span> <span class="o">*</span><span class="n">placemarks</span><span class="p">)</span>
+            <span class="p">])</span>
+
+            <span class="n">doc</span> <span class="o">=</span> <span class="n">KML</span><span class="o">.</span><span class="n">Document</span><span class="p">(</span><span class="o">*</span><span class="n">preamble</span><span class="p">)</span>
+
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">output_path</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">filename_pattern</span> <span class="o">%</span> <span class="p">(</span><span class="n">ident</span><span class="p">,</span> <span class="n">i</span><span class="p">)),</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">stream</span><span class="p">:</span>
+                <span class="n">stream</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">etree</span><span class="o">.</span><span class="n">tostring</span><span class="p">(</span><span class="n">doc</span><span class="p">))</span>
+
+            <span class="n">file_paths</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">legend</span><span class="o">.</span><span class="n">render</span><span class="p">())</span>
+
+            <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="n">file_paths</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">output_path</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">file_paths</span>
+
+</div></div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">fluxpy.mediators</span> <span class="kn">import</span> <span class="o">*</span>
+    <span class="kn">from</span> <span class="nn">fluxpy.models</span> <span class="kn">import</span> <span class="o">*</span>
+    <span class="n">output_path</span> <span class="o">=</span> <span class="s">&#39;/home/kaendsle/Desktop/&#39;</span>
+
+    <span class="c">#kml = ScoredKMLView(Grid3DMediator(), KrigedXCO2Matrix, &#39;xco2&#39;)</span>
+    <span class="c">#files = kml.render({}, output_path, color=&#39;dBrBG11&#39;)</span>
+
+    <span class="n">kml</span> <span class="o">=</span> <span class="n">StaticKMLView</span><span class="p">(</span><span class="n">Grid3DMediator</span><span class="p">(),</span> <span class="n">KrigedXCO2Matrix</span><span class="p">,</span> <span class="s">&#39;xco2&#39;</span><span class="p">)</span>
+    <span class="n">files</span> <span class="o">=</span> <span class="n">kml</span><span class="o">.</span><span class="n">render</span><span class="p">({</span>
+        <span class="s">&#39;_id&#39;</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="s">&#39;2009-06-15T00:00:00&#39;</span><span class="p">,</span> <span class="s">&#39;%Y-%m-</span><span class="si">%d</span><span class="s">T%H:%M:%S&#39;</span><span class="p">)</span>
+    <span class="p">},</span> <span class="n">output_path</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;BuGn3&#39;</span><span class="p">)</span>
+
+    <span class="n">kmz</span> <span class="o">=</span> <span class="n">KMZWrapper</span><span class="p">(</span><span class="n">output_path</span><span class="p">,</span> <span class="n">files</span><span class="o">.</span><span class="n">pop</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">kmz</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">output_path</span><span class="p">,</span> <span class="s">&#39;static_3d_grid_sequential_3_bins.kmz&#39;</span><span class="p">))</span>
+
+    <span class="c">#legend = Legend((2, 5), DivergingColors(&#39;dRdBu3&#39;, COLORS.get(&#39;dRdBu3&#39;)).legend_entries(), output_path, &#39;dRdBu3&#39;)</span>
+    <span class="c">#legend = Legend((2, 5), DivergingColors(&#39;dBrBG11&#39;).legend_entries(), output_path, &#39;dBrBG11&#39;)</span>
+    <span class="c">#legend.render()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">flux-python-api 0.01 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, K. Arthur Endsley.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

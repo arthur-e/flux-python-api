@@ -1,10 +1,10 @@
 #!/usr/bin/python
 
-import sys, getopt, copy, pprint, traceback
+import sys, getopt, copy, pprint, traceback, ast
 from pymongo import MongoClient
 from fluxpy import models
+from fluxpy import mediators
 from fluxpy.mediators import *
-
 
 usage_hdr = """
 manage.py [COMMAND] [REQUIRED ARGS FOR COMMAND] [OPTIONAL ARGUsS FOR COMMAND]
@@ -27,7 +27,7 @@ manage.py load
     Usage:
         manage.py load -p <filepath> -m <model> -n <collection_name> [OPTIONAL ARGS]
         
-    Required argument:
+    Required arguments:
     
         -p, --path               Directory path of input file in Matlab (*.mat)
                                  or HDF5 (*.h5 or *.mat) format 
@@ -43,25 +43,19 @@ manage.py load
         -c, --config_file        Specify location of json config file. By
                                  default, seeks input file w/ .json extension.
     
-    These optional args can be used to override specifications of the config file:
-    
-        -v, --var_name           The name of the variable in the hierarchical
-                                 file that stores the data
-                                 
-        -t, --timestamp          An ISO 8601 timestamp for the first observation
-        
-        -T, --title              "Pretty" name, for displaying within
-                                 visualization application
+        -o, --options            Use to override specifications in the config file.
+                                 Syntax: -o "parameter1=value1;parameter2=value2;parameter3=value3"
+                                 e.g.: -o "title=MyData;gridres={'units':'degrees,'x':1.0,'y':1.0}"
     
     Examples:
     
-        python manage.py load -p ~/data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004
+        python manage.py load -p ./data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004
     
     In the following example, the program will look for a config file
     at ~/data_casa_gfed.json and overwrite the timestamp and var_name
     specifications in that file with those provided as command line args:
     
-        python manage.py load -p ~/data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004 -t 2003-12-22T03:00:00 -v casa_gfed_2004
+        python manage.py load -p ./data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004 -o "timestamp=2003-12-22T03:00:00;var_name=casa_gfed_2004"
 """
 
 usage_remove = """
@@ -143,9 +137,9 @@ usage_all = ('\n' + '-'*30).join([usage_hdr,usage_load,usage_remove,usage_rename
 commands = {
         'load' : {'path': True,
                   'model': True,
+                  'mediator': False,
                   'collection_name': True,
-                  'timestamp': False,
-                  'var_name': False,
+                  'options': False,
                   'config_file': False},
             
         'remove': {'collection_name': True},
@@ -163,12 +157,12 @@ commands = {
 # colons (:) indicate that option must be followed by an argument
 options = {'help': 'h',
            'path': 'p:',
-           'timestamp': 't:',
+           'mediator': 'd:',
            'model': 'm:',
-           'var_name': 'v:',
            'collection_name': 'n:',
            'new_name': 'r:',
            'config_file': 'c:',
+           'options': 'o:',
            'include_counts': 'x',
            'list_ids': 'l:',
            'audit': 'a'}
@@ -235,22 +229,36 @@ def main(argv):
     globals()['_' + command](**kwargs)
 
 
-def _load(path, model, collection_name, **kwargs):
+def _load(path, model, collection_name, mediator=None, **kwargs):
     """
-    Uploads data to MongoDB using given model
+    Uploads data to MongoDB using given model and mediator
     """
-    # remove the empty args from kwargs to prevent config_file from being
-    # overwritten with 'None's
-    kwargs = {k: v for k, v in kwargs.items() if v}
     
-    # load the data
+    # parse any config options into individual kwarg entries:
+    if kwargs['options']:
+        tmp = kwargs['options'].split(';')
+        for o in tmp:
+            tmp2 = o.split('=')
+            if tmp2[0] in ['timestamp','title','var_name']: # evaluate strings as strings
+                kwargs[tmp2[0]] = tmp2[1]
+            else: # for dict/array values, evaluate string literally
+                kwargs[tmp2[0]] = ast.literal_eval(tmp2[1])
+    
+    # load the data/instantiate the model
     inst = getattr(models, model)(path=path,
                                   collection_name=collection_name,
                                   **kwargs)
     
-    # TBD: modify this to call the appropriate mediator...
-    mediator = Grid4DMediator().save(collection_name, inst, verbose=True)
-
+    # now use mediator to save to db
+    default_mediators = {'SpatioTemporalMatrix': mediators.Grid4DMediator,
+                         'XCO2Matrix': mediators.Unstructured3DMediator,
+                         'KrigedXCO2Matrix': mediators.Grid3DMediator,
+                         }
+    
+    if not mediator:
+        mediator = default_mediators[model]
+    mediator().save(collection_name, inst, verbose=True)
+    
     sys.stderr.write('\nUpload complete!\n')
 
 def _remove(collection_name):
@@ -296,6 +304,8 @@ def _rename(collection_name,new_name):
         # first create a temporary backup of the collection in case something fails
         orig_name = col + '_orig'
         for x in db[col].find(): db[orig_name].insert(x)
+        
+        # now attempt the rename
         try:
             document = db[col].find_one({'_id': collection_name})
             document['_id'] = new_name
@@ -307,7 +317,8 @@ def _rename(collection_name,new_name):
             db[col].drop()
             for x in db[orig_name].find(): db[col].insert(x)
             traceback.print_exc()
-            
+        
+        # and finally remove the temporary backup collection
         db[orig_name].drop()
         
     print 'Complete.\n'
@@ -318,10 +329,10 @@ def _db(list_ids=None,collection_name=None,audit=None,include_counts=False):
     appropriate functions
     """
     print
-    list_valid_values = ['collections','metadata','coord_index']
+    list_valid_values = ['collections','metadata','coord_index','c','m','i']
     if list_ids:
         if list_ids in list_valid_values:
-            if list_ids not in ['collections',''] and include_counts:
+            if list_ids not in ['collections','c',''] and include_counts:
                 print 'Option -x (for including record counts) is not valid ' \
                       'for the {0} argument, ignoring.'.format(list_ids)
             _list(list_ids=list_ids,include_counts=include_counts)
@@ -347,7 +358,7 @@ def _list(list_ids='collections',include_counts=False):
     if list_ids in ['collections','']:
         for c in db.collection_names():
             if c not in RESERVED_COLLECTION_NAMES + ('system.indexes',):
-                print c + (': %i' % db[c].count() if include_counts else '')
+                print c + (' (%i' % db[c].count() + ' records)' if include_counts else '')
     else:
         for id in _return_id_list(db,list_ids):
             print id

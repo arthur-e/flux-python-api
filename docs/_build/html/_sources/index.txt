@@ -72,7 +72,7 @@ Loading with **manage.py load**::
     Usage:
         manage.py load -p <filepath> -m <model> -n <collection_name> [OPTIONAL ARGS]
         
-    Required argument:
+    Required arguments:
     
         -p, --path               Directory path of input file in Matlab (*.mat)
                                  or HDF5 (*.h5 or *.mat) format 
@@ -88,15 +88,9 @@ Loading with **manage.py load**::
         -c, --config_file        Specify location of json config file. By
                                  default, seeks input file w/ .json extension.
     
-    These optional args can be used to override specifications of the config file:
-    
-        -v, --var_name           The name of the variable in the hierarchical
-                                 file that stores the data
-                                 
-        -t, --timestamp          An ISO 8601 timestamp for the first observation
-        
-        -T, --title              "Pretty" name, for displaying within
-                                 visualization application
+        -o, --options            Use to override specifications in the config file.
+                                 Syntax: -o "parameter1=value1;parameter2=value2;parameter3=value3"
+                                 e.g.: -o "title=MyData;gridres={'units':'degrees,'x':1.0,'y':1.0}"
 
 
 The configuration file
@@ -164,34 +158,36 @@ Contents of an example configuration file are shown here::
 
 
 
-**manage.py load** examples
+*manage.py load* examples
 -----------------------------------
 
-Most basic example; assumes a configuration file exists at *~/mydata/data_casa_gfed_3hrly.json*::
+Most basic example; assumes a configuration file exists at *./mydata/data_casa_gfed_3hrly.json*::
 	
-	$ python manage.py load -p ~/data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004
+	$ python manage.py load -p ./data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004
 
 Specify an alternate config file to use::
 
-	$ python manage.py load -p ~/data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004 -c ~/config/casa_gfed.json
+	$ python manage.py load -p ./data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004 -c ./config/casa_gfed.json
 
-In the following example, the program will look for a config file at ~/data_casa_gfed.json and overwrite the timestamp and var_name specifications in that file with those provided as command line args::
+In the following example, the loader will look for a config file at ./data_casa_gfed.json and overwrite the *timestamp* and *var_name* parameters in that file with those provided as command line args::
     
-    $ python manage.py load -p ~/data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004 -t 2003-12-22T03:00:00 -v casa_gfed_2004
+    $ python manage.py load -p ./data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004 -o "timestamp=2003-12-22T03:00:00;var_name=casa_gfed_2004"
 
 
 
 **Removing data**
 ================================
     
-Use the **manage.py remove** utility to remove data collections from the database::
+Use the **manage.py remove** utility to remove data collections from the database.
+
+::
 
     $ manage.py remove -n <collection_name>
         
     Required argument:
         -n, --collection_name    Collection name to be removed (MongoDB identifier)
 
-**manage.py remove** example
+*manage.py remove* example
 -----------------------------------
    
 ::
@@ -202,7 +198,12 @@ Use the **manage.py remove** utility to remove data collections from the databas
 **Renaming collections**
 ================================
     
-Use the **manage.py rename** utility to rename data collections in the database::
+Use the **manage.py rename** utility to rename data collections in the database.
+
+.. WARNING::
+	It is important to use this utility for renaming rather than manually renaming collections by interfacing directly with MongoDB because several metadata tables require corresponding updates.
+
+::
 
     $ manage.py rename -n <collection_name> -r <new_name>
         
@@ -210,7 +211,7 @@ Use the **manage.py rename** utility to rename data collections in the database:
         -n, --collection_name    Collection name to be removed (MongoDB identifier)
         -r, --new_name           New name for the collection       
 
-**manage.py rename** example
+*manage.py rename* example
 -----------------------------------
    
 ::
@@ -247,7 +248,7 @@ Use the **manage.py db** utility to get diagnostic information on database conte
                                  collection. Valid only with a corresponding
                                  "-l collections" flag; ignored otherwise
 
-**manage.py db** examples
+*manage.py db* examples
 -----------------------------------
         
 List all collections and their number of records::
@@ -268,3 +269,30 @@ Show metadata for the collection with id "casa_gfed_2004"::
 Audit the database::
 
     $ python manage.py db -a
+    
+
+**Module documentation**
+=============================================
+fluxpy.models
+-------------
+.. automodule:: fluxpy.models  
+	:members:
+	:show-inheritance:
+	
+fluxpy.mediators
+----------------
+.. automodule:: fluxpy.mediators  
+	:members:
+	:show-inheritance:
+
+fluxpy.outputs
+----------------
+.. automodule:: fluxpy.outputs  
+	:members:
+	:show-inheritance:
+	
+fluxpy.utils
+----------------
+.. automodule:: fluxpy.utils  
+	:members:
+	:show-inheritance:
