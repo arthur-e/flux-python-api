@@ -88,7 +88,7 @@ if __name__ == '__main__':
     elif sys.argv[1] == 'xco2':
         path = '/net/nas3/data/gis_lab/project/NASA_ACOS_Visualization/Data/xco2/XCO2_20090615_20090620.mat'
         inst = XCO2Matrix(path)
-        mediator = Unstructured3DMediator().save('r2_xco2', inst)
+        mediator = Unstructured3DMediator().save('test', inst)
 
     elif sys.argv[1] == 'kriged_xco2':
         path = '/net/nas3/data/gis_lab/project/NASA_ACOS_Visualization/Data/xco2/Kriged_20090615_20090620.mat'

@@ -301,7 +301,6 @@ class XCO2Matrix(TransformationInterface):
             'type': 'Point'
         }
         self.header = ['lng', 'lat', 'xco2_ppm', 'day', 'year', 'error_ppm']
-        self.spans = [518400] # 6 days in seconds
         self.parameters = ['value', 'error']
         self.regex = {
             'regex': '^XCO2_(?P<timestamp>\d{4}\d{2}\d{2})_.*$',
@@ -325,11 +324,12 @@ class XCO2Matrix(TransformationInterface):
             df = self.extract(**kwargs)
 
         bounds = MultiPoint(df.set_index(['x', 'y']).index.tolist()).bounds
-        dates = df['timestamp'].map(lambda x: x.strftime('%Y-%m-%dT%H:%M:%S')).unique()
-        dates.sort()
+        dates = df['timestamp'].map(lambda x: x.strftime('%Y-%m-%dT%H:%M:%S'))\
+            .unique().tolist()
+        dates.sort(lambda x, y: cmp(y, x))
 
         self.__metadata__ = {
-            'dates': dates.tolist(),
+            'dates': dates,
             'bbox': bounds,
             'bboxmd5': md5(str(bounds)).hexdigest()
         }

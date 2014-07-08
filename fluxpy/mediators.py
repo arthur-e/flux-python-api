@@ -49,11 +49,20 @@ class Mediator(object):
             elif last_metadata.has_key('spans'):
                 key = 'spans'
 
+            else:
+                key = None
+
             last_dates = last_metadata.get('dates')
             dates_update = list(last_metadata.get('dates'))
-            steps_update = list(last_metadata.get(key))
 
-            for datestr, step_or_span in zip(metadata.get('dates'), metadata.get(key)):
+            if key is not None:
+                steps_update = list(last_metadata.get(key))
+                the_update = zip(metadata.get('dates'), metadata.get(key))
+
+            else:
+                the_update = zip(metadata.get('dates'), range(len(metadata.get('dates'))))
+
+            for datestr, step_or_span in the_update:
                 date = parser.parse(datestr)
 
                 i = 0
@@ -71,7 +80,9 @@ class Mediator(object):
 
                         # Insert older timestamp, step/span e.g. [old, *new, old, old]
                         dates_update.insert(i, datestr)
-                        steps_update.insert(i, step_or_span)
+                        if key is not None:
+                            steps_update.insert(i, step_or_span)
+
                         break
 
                     # Is it being compared to the last date and still more recent?
@@ -80,7 +91,9 @@ class Mediator(object):
                         if date != very_last_date:
                             # Add new timestamp, step/span e.g.: [old, old, *new]
                             dates_update.append(datestr)
-                            steps_update.append(step_or_span)
+                            if key is not None:
+                                steps_update.append(step_or_span)
+
                             break
 
                     i += 1
@@ -95,6 +108,11 @@ class Mediator(object):
             update_selection.update({
                 'dates': dates_update,
                 'spans': steps_update
+            })
+
+        else:
+            update_selection.update({
+                'dates': dates_update
             })
 
         return update_selection
