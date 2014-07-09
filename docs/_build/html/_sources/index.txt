@@ -285,14 +285,3 @@ fluxpy.mediators
 	:members:
 	:show-inheritance:
 
-fluxpy.outputs
-----------------
-.. automodule:: fluxpy.outputs  
-	:members:
-	:show-inheritance:
-	
-fluxpy.utils
-----------------
-.. automodule:: fluxpy.utils  
-	:members:
-	:show-inheritance:

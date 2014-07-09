@@ -47,7 +47,6 @@
           <div class="body">
             
   <h1>Source code for fluxpy.mediators</h1><div class="highlight"><pre>
-<span class="c"># Commenting this out so that it is not picked up by Sphinx autodoc</span>
 <span class="c">#===============================================================================</span>
 <span class="c"># Example data:</span>
 <span class="c"># /ws4/idata/fluxvis/casa_gfed_inversion_results/1.zerofull_casa_1pm_10twr/Month_Uncert1.mat</span>
@@ -58,7 +57,6 @@
 <span class="c"># xco2 = KrigedXCO2Matrix(&#39;xco2_data.mat&#39;, timestamp=&#39;2009-06-15&#39;)</span>
 <span class="c"># mediator.add(xco2).save_to_db(&#39;my_xco2_data&#39;)</span>
 <span class="c">#===============================================================================</span>
-
 
 <span class="kn">import</span> <span class="nn">datetime</span>
 <span class="kn">import</span> <span class="nn">os</span>
@@ -76,8 +74,8 @@
 <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
     <span class="kn">import</span> <span class="nn">md5</span>
 
-<span class="k">class</span> <span class="nc">Mediator</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
-<div class="viewcode-block" id="Mediator"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Mediator">[docs]</a>    <span class="sd">&#39;&#39;&#39;</span>
+<div class="viewcode-block" id="Mediator"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Mediator">[docs]</a><span class="k">class</span> <span class="nc">Mediator</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    A generic model for transforming data between foreign formats and the</span>
 <span class="sd">    persistence layer of choice (MongoDB in this application). Mediator calls</span>
 <span class="sd">    the extract() method on subclasses of the TransformationInterface (those</span>
@@ -100,11 +98,20 @@
             <span class="k">elif</span> <span class="n">last_metadata</span><span class="o">.</span><span class="n">has_key</span><span class="p">(</span><span class="s">&#39;spans&#39;</span><span class="p">):</span>
                 <span class="n">key</span> <span class="o">=</span> <span class="s">&#39;spans&#39;</span>
 
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">key</span> <span class="o">=</span> <span class="bp">None</span>
+
             <span class="n">last_dates</span> <span class="o">=</span> <span class="n">last_metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;dates&#39;</span><span class="p">)</span>
             <span class="n">dates_update</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">last_metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;dates&#39;</span><span class="p">))</span>
-            <span class="n">steps_update</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">last_metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">))</span>
 
-            <span class="k">for</span> <span class="n">datestr</span><span class="p">,</span> <span class="n">step_or_span</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;dates&#39;</span><span class="p">),</span> <span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">steps_update</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">last_metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">))</span>
+                <span class="n">the_update</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;dates&#39;</span><span class="p">),</span> <span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">))</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">the_update</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;dates&#39;</span><span class="p">),</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;dates&#39;</span><span class="p">))))</span>
+
+            <span class="k">for</span> <span class="n">datestr</span><span class="p">,</span> <span class="n">step_or_span</span> <span class="ow">in</span> <span class="n">the_update</span><span class="p">:</span>
                 <span class="n">date</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">datestr</span><span class="p">)</span>
 
                 <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
@@ -122,7 +129,9 @@
 
                         <span class="c"># Insert older timestamp, step/span e.g. [old, *new, old, old]</span>
                         <span class="n">dates_update</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">datestr</span><span class="p">)</span>
-                        <span class="n">steps_update</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">step_or_span</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                            <span class="n">steps_update</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">step_or_span</span><span class="p">)</span>
+
                         <span class="k">break</span>
 
                     <span class="c"># Is it being compared to the last date and still more recent?</span>
@@ -131,7 +140,9 @@
                         <span class="k">if</span> <span class="n">date</span> <span class="o">!=</span> <span class="n">very_last_date</span><span class="p">:</span>
                             <span class="c"># Add new timestamp, step/span e.g.: [old, old, *new]</span>
                             <span class="n">dates_update</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">datestr</span><span class="p">)</span>
-                            <span class="n">steps_update</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">step_or_span</span><span class="p">)</span>
+                            <span class="k">if</span> <span class="n">key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                                <span class="n">steps_update</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">step_or_span</span><span class="p">)</span>
+
                             <span class="k">break</span>
 
                     <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
@@ -148,6 +159,11 @@
                 <span class="s">&#39;spans&#39;</span><span class="p">:</span> <span class="n">steps_update</span>
             <span class="p">})</span>
 
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">update_selection</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
+                <span class="s">&#39;dates&#39;</span><span class="p">:</span> <span class="n">dates_update</span>
+            <span class="p">})</span>
+
         <span class="k">return</span> <span class="n">update_selection</span>
 
     <span class="k">def</span> <span class="nf">copy_grid_geometry</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reference_name</span><span class="p">):</span>
@@ -160,8 +176,8 @@
             <span class="s">&#39;i&#39;</span><span class="p">:</span> <span class="n">coords</span>
         <span class="p">})</span>
 
-    <span class="k">def</span> <span class="nf">generate_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
-<div class="viewcode-block" id="Mediator.generate_metadata"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Mediator.generate_metadata">[docs]</a>        <span class="sd">&#39;&#39;&#39;</span>
+<div class="viewcode-block" id="Mediator.generate_metadata"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Mediator.generate_metadata">[docs]</a>    <span class="k">def</span> <span class="nf">generate_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">        Creates an entry in the metadata collection for this instance of data;</span>
 <span class="sd">        updates the summary statistics of that entry if it already exists.</span>
 <span class="sd">        &#39;&#39;&#39;</span>
@@ -200,14 +216,14 @@
                 <span class="p">})</span>
 
         <span class="k">return</span> <span class="n">metadata</span>
-
-    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">,</span> <span class="n">instance</span><span class="p">):</span></div>
-<div class="viewcode-block" id="Mediator.save"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Mediator.save">[docs]</a>        <span class="sd">&#39;&#39;&#39;Transforms contents of Data Frame into JSON representation for MongoDB&#39;&#39;&#39;</span>
+</div>
+<div class="viewcode-block" id="Mediator.save"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Mediator.save">[docs]</a>    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">,</span> <span class="n">instance</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Transforms contents of Data Frame into JSON representation for MongoDB&#39;&#39;&#39;</span>
         <span class="k">if</span> <span class="n">collection_name</span> <span class="ow">in</span> <span class="n">RESERVED_COLLECTION_NAMES</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;The collection name provided is a reserved name&#39;</span><span class="p">)</span>
-
-    <span class="k">def</span> <span class="nf">summarize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">,</span> <span class="n">query</span><span class="o">=</span><span class="p">{}):</span></div>
-<div class="viewcode-block" id="Mediator.summarize"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Mediator.summarize">[docs]</a>        <span class="sd">&#39;&#39;&#39;</span>
+</div>
+<div class="viewcode-block" id="Mediator.summarize"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Mediator.summarize">[docs]</a>    <span class="k">def</span> <span class="nf">summarize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">collection_name</span><span class="p">,</span> <span class="n">query</span><span class="o">=</span><span class="p">{}):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">        Generates summary statistics by parameter over the data in a collection.</span>
 <span class="sd">        This was designed and tested for the &quot;3D&quot; case i.e. spatial data in a</span>
 <span class="sd">        tabular form and NOT for the &quot;4D&quot; case i.e. spatiotemporal data in a</span>
@@ -248,9 +264,9 @@
 
         <span class="k">return</span> <span class="n">summary</span>
 
-
-<span class="k">class</span> <span class="nc">Grid4DMediator</span><span class="p">(</span><span class="n">Mediator</span><span class="p">):</span></div></div>
-<div class="viewcode-block" id="Grid4DMediator"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Grid4DMediator">[docs]</a>    <span class="sd">&#39;&#39;&#39;</span>
+</div></div>
+<div class="viewcode-block" id="Grid4DMediator"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Grid4DMediator">[docs]</a><span class="k">class</span> <span class="nc">Grid4DMediator</span><span class="p">(</span><span class="n">Mediator</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Mediator that understands spatial data on a structured, longitude-latitude</span>
 <span class="sd">    grid that vary in time; two spatial dimensions and an aribtrary number of</span>
 <span class="sd">    time steps (frames). Geometry expected as grid centroids (e.g. centroids</span>
@@ -337,9 +353,9 @@
             <span class="p">}</span>
         <span class="p">}</span>
 
-
-<span class="k">class</span> <span class="nc">Grid3DMediator</span><span class="p">(</span><span class="n">Mediator</span><span class="p">):</span></div>
-<div class="viewcode-block" id="Grid3DMediator"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Grid3DMediator">[docs]</a>    <span class="sd">&#39;&#39;&#39;</span>
+</div>
+<div class="viewcode-block" id="Grid3DMediator"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Grid3DMediator">[docs]</a><span class="k">class</span> <span class="nc">Grid3DMediator</span><span class="p">(</span><span class="n">Mediator</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Mediator that understands single-valued, spatial data on a structured,</span>
 <span class="sd">    longitude-latitude grid; two spatial dimensions, one value dimension (3D).</span>
 <span class="sd">    Geometry expected as grid centroids (e.g. centroids of 1-degree grid cells).</span>
@@ -450,9 +466,9 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">db_name</span><span class="p">][</span><span class="n">collection_name</span><span class="p">]</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">data_dict</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">generate_metadata</span><span class="p">(</span><span class="n">collection_name</span><span class="p">,</span> <span class="n">instance</span><span class="p">)</span>
 
-
-<span class="k">class</span> <span class="nc">Unstructured3DMediator</span><span class="p">(</span><span class="n">Mediator</span><span class="p">):</span></div>
-<div class="viewcode-block" id="Unstructured3DMediator"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Unstructured3DMediator">[docs]</a>    <span class="sd">&#39;&#39;&#39;</span>
+</div>
+<div class="viewcode-block" id="Unstructured3DMediator"><a class="viewcode-back" href="../../index.html#fluxpy.mediators.Unstructured3DMediator">[docs]</a><span class="k">class</span> <span class="nc">Unstructured3DMediator</span><span class="p">(</span><span class="n">Mediator</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Mediator that understands single-valued, spatial data with arbitrary</span>
 <span class="sd">    positions given as longitude-latitude pairs; two spatial dimensions, one</span>
 <span class="sd">    value dimension (3D).</span>

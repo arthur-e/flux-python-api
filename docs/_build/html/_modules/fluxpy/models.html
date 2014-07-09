@@ -350,7 +350,6 @@
             <span class="s">&#39;type&#39;</span><span class="p">:</span> <span class="s">&#39;Point&#39;</span>
         <span class="p">}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">header</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;lng&#39;</span><span class="p">,</span> <span class="s">&#39;lat&#39;</span><span class="p">,</span> <span class="s">&#39;xco2_ppm&#39;</span><span class="p">,</span> <span class="s">&#39;day&#39;</span><span class="p">,</span> <span class="s">&#39;year&#39;</span><span class="p">,</span> <span class="s">&#39;error_ppm&#39;</span><span class="p">]</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">spans</span> <span class="o">=</span> <span class="p">[</span><span class="mi">518400</span><span class="p">]</span> <span class="c"># 6 days in seconds</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;value&#39;</span><span class="p">,</span> <span class="s">&#39;error&#39;</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">regex</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s">&#39;regex&#39;</span><span class="p">:</span> <span class="s">&#39;^XCO2_(?P&lt;timestamp&gt;\d{4}\d{2}\d{2})_.*$&#39;</span><span class="p">,</span>
@@ -374,9 +373,12 @@
             <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">extract</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
         <span class="n">bounds</span> <span class="o">=</span> <span class="n">MultiPoint</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">set_index</span><span class="p">([</span><span class="s">&#39;x&#39;</span><span class="p">,</span> <span class="s">&#39;y&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span><span class="o">.</span><span class="n">bounds</span>
+        <span class="n">dates</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s">&#39;timestamp&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s">&#39;%Y-%m-</span><span class="si">%d</span><span class="s">T%H:%M:%S&#39;</span><span class="p">))</span>\
+            <span class="o">.</span><span class="n">unique</span><span class="p">()</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+        <span class="n">dates</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="nb">cmp</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="p">))</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">__metadata__</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="s">&#39;dates&#39;</span><span class="p">:</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span><span class="p">],</span>
+            <span class="s">&#39;dates&#39;</span><span class="p">:</span> <span class="n">dates</span><span class="p">,</span>
             <span class="s">&#39;bbox&#39;</span><span class="p">:</span> <span class="n">bounds</span><span class="p">,</span>
             <span class="s">&#39;bboxmd5&#39;</span><span class="p">:</span> <span class="n">md5</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">bounds</span><span class="p">))</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
         <span class="p">}</span>

@@ -438,86 +438,6 @@ value dimension (3D).</p>
 </dd></dl>
 
 </div>
-<div class="section" id="module-fluxpy.outputs">
-<span id="fluxpy-outputs"></span><h2>fluxpy.outputs<a class="headerlink" href="#module-fluxpy.outputs" title="Permalink to this headline">¶</a></h2>
-<p>For generating specific, derived outputs from spatio-temporal data. If a class
-here has the render() method on one of its instances, the method is expected
-to return a string or sequence of strings where each string is a file system 
-path (either a directory or a file).</p>
-<dl class="class">
-<dt id="fluxpy.outputs.AbstractGridView">
-<em class="property">class </em><tt class="descclassname">fluxpy.outputs.</tt><tt class="descname">AbstractGridView</tt><big>(</big><em>mediator</em>, <em>model</em>, <em>collection_name</em><big>)</big><a class="reference internal" href="_modules/fluxpy/outputs.html#AbstractGridView"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#fluxpy.outputs.AbstractGridView" title="Permalink to this definition">¶</a></dt>
-<dd><p>An abstract class of gridded outputs.</p>
-</dd></dl>
-
-<dl class="class">
-<dt id="fluxpy.outputs.AbstractScoreView">
-<em class="property">class </em><tt class="descclassname">fluxpy.outputs.</tt><tt class="descname">AbstractScoreView</tt><big>(</big><em>mediator</em>, <em>model</em>, <em>collection_name</em><big>)</big><a class="reference internal" href="_modules/fluxpy/outputs.html#AbstractScoreView"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#fluxpy.outputs.AbstractScoreView" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference internal" href="#fluxpy.outputs.AbstractGridView" title="fluxpy.outputs.AbstractGridView"><tt class="xref py py-class docutils literal"><span class="pre">fluxpy.outputs.AbstractGridView</span></tt></a></p>
-<p>An abstract class of outputs based on standard scores (z scores).</p>
-</dd></dl>
-
-<dl class="class">
-<dt id="fluxpy.outputs.KMZWrapper">
-<em class="property">class </em><tt class="descclassname">fluxpy.outputs.</tt><tt class="descname">KMZWrapper</tt><big>(</big><em>output_path</em>, <em>kml_file</em><big>)</big><a class="reference internal" href="_modules/fluxpy/outputs.html#KMZWrapper"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#fluxpy.outputs.KMZWrapper" title="Permalink to this definition">¶</a></dt>
-<dd><p>Generates a Zipped KML; a ZIP archive with KML files and dependencies (e.g.
-image overlays, icons) inside.</p>
-</dd></dl>
-
-<dl class="class">
-<dt id="fluxpy.outputs.Legend">
-<em class="property">class </em><tt class="descclassname">fluxpy.outputs.</tt><tt class="descname">Legend</tt><big>(</big><em>size</em>, <em>entries</em>, <em>path='.'</em>, <em>scale_name='legend'</em><big>)</big><a class="reference internal" href="_modules/fluxpy/outputs.html#Legend"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#fluxpy.outputs.Legend" title="Permalink to this definition">¶</a></dt>
-<dd><p>A legend for a classification scale based on colored parcels. The entries
-are drawn as square cells in a vertical list.</p>
-<dl class="method">
-<dt id="fluxpy.outputs.Legend.render">
-<tt class="descname">render</tt><big>(</big><em>patch_size=0.5</em>, <em>alpha=1.0</em>, <em>x_offset=100</em><big>)</big><a class="reference internal" href="_modules/fluxpy/outputs.html#Legend.render"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#fluxpy.outputs.Legend.render" title="Permalink to this definition">¶</a></dt>
-<dd><p>Draws the legend graphic and saves it to a file.</p>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="class">
-<dt id="fluxpy.outputs.ScoredKMLView">
-<em class="property">class </em><tt class="descclassname">fluxpy.outputs.</tt><tt class="descname">ScoredKMLView</tt><big>(</big><em>mediator</em>, <em>model</em>, <em>collection_name</em><big>)</big><a class="reference internal" href="_modules/fluxpy/outputs.html#ScoredKMLView"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#fluxpy.outputs.ScoredKMLView" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference internal" href="#fluxpy.outputs.AbstractScoreView" title="fluxpy.outputs.AbstractScoreView"><tt class="xref py py-class docutils literal"><span class="pre">fluxpy.outputs.AbstractScoreView</span></tt></a></p>
-<p>Writes out KML files from spatio-temporal data provided by a Mediator
-where the values represented in the KML are standard scores (z scores).</p>
-<dl class="method">
-<dt id="fluxpy.outputs.ScoredKMLView.render">
-<tt class="descname">render</tt><big>(</big><em>query</em>, <em>output_path</em>, <em>keys=('values'</em>, <em>'errors')</em>, <em>color='dBrBG11'</em>, <em>vscale=100000</em><big>)</big><a class="reference internal" href="_modules/fluxpy/outputs.html#ScoredKMLView.render"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#fluxpy.outputs.ScoredKMLView.render" title="Permalink to this definition">¶</a></dt>
-<dd><p>Generates a KML view of gridded, 3D data with standard scores (z scores)
-using up to two fields, given by the dictionary keys, in the connected 
-data e.g. the first field will be used to encode color and the second
-field to encode the KML Polygon extrusion height. Assumes that each grid
-cell has a single longitude-latitude pair describing its centroid.</p>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="class">
-<dt id="fluxpy.outputs.StaticKMLView">
-<em class="property">class </em><tt class="descclassname">fluxpy.outputs.</tt><tt class="descname">StaticKMLView</tt><big>(</big><em>mediator</em>, <em>model</em>, <em>collection_name</em><big>)</big><a class="reference internal" href="_modules/fluxpy/outputs.html#StaticKMLView"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#fluxpy.outputs.StaticKMLView" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference internal" href="#fluxpy.outputs.AbstractGridView" title="fluxpy.outputs.AbstractGridView"><tt class="xref py py-class docutils literal"><span class="pre">fluxpy.outputs.AbstractGridView</span></tt></a></p>
-<p>Writes out KML files from spatio-temporal data provided by a Mediator.</p>
-<dl class="method">
-<dt id="fluxpy.outputs.StaticKMLView.render">
-<tt class="descname">render</tt><big>(</big><em>query</em>, <em>output_path</em>, <em>keys=('values'</em>, <em>'errors')</em>, <em>bins=3</em>, <em>color='BrBG11'</em>, <em>vscale=1000</em>, <em>vpow=2</em>, <em>cutoffs=(None</em>, <em>1.2)</em><big>)</big><a class="reference internal" href="_modules/fluxpy/outputs.html#StaticKMLView.render"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#fluxpy.outputs.StaticKMLView.render" title="Permalink to this definition">¶</a></dt>
-<dd><p>Generates a KML view of gridded, 3D data using up to two fields,
-given by the dictionary keys, in the connected data e.g. the first
-field will be used to encode color and the second field to encode the
-KML Polygon extrusion height. Assumes that each grid cell has a
-single longitude-latitude pair describing its centroid. The keys
-argument is a sequence of strings representing field names to use for
-these symbols, in order: the polygon style, the altitude.</p>
-</dd></dl>
-
-</dd></dl>
-
-</div>
-<div class="section" id="module-fluxpy.utils">
-<span id="fluxpy-utils"></span><h2>fluxpy.utils<a class="headerlink" href="#module-fluxpy.utils" title="Permalink to this headline">¶</a></h2>
-</div>
 </div>
 
 
@@ -554,8 +474,6 @@ these symbols, in order: the polygon style, the altitude.</p>
 <li><a class="reference internal" href="#module-documentation"><strong>Module documentation</strong></a><ul>
 <li><a class="reference internal" href="#module-fluxpy.models">fluxpy.models</a></li>
 <li><a class="reference internal" href="#module-fluxpy.mediators">fluxpy.mediators</a></li>
-<li><a class="reference internal" href="#module-fluxpy.outputs">fluxpy.outputs</a></li>
-<li><a class="reference internal" href="#module-fluxpy.utils">fluxpy.utils</a></li>
 </ul>
 </li>
 </ul>
