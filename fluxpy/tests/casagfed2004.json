@@ -1,15 +1,22 @@
 {
-    "columns": ["x","y"],       
-    "grid": {
+    "columns": ["x","y"],
+    "gridres": {
 		"units": "degrees",
-		"x": 1.0,
-		"y": 1.0
+	    "x": 1.0,
+	    "y": 1.0
 	},
-    "header": ["lng","lat"],  
-    "parameters": ["value","error"],
+    "header": [
+        "lng",
+        "lat"
+    ],
+    "parameters": ["values"],
     "steps": [10800],
-    "timestamp": "2003-12-22T03:00:00",
+    "timestamp": "2012-12-22T03:00:00",
     "title": "Surface Carbon Flux",
-    "units": ["degrees","degrees"],
+    "units": {
+        "x": "degrees",
+        "y": "degrees",
+        "values": "&mu;mol/m&sup2;"
+    },
     "var_name": "casa_gfed_2004"
 }

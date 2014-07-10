@@ -7,7 +7,7 @@ from fluxpy import mediators
 from fluxpy.mediators import *
 
 usage_hdr = """
-manage.py [COMMAND] [REQUIRED ARGS FOR COMMAND] [OPTIONAL ARGUsS FOR COMMAND]
+manage.py [COMMAND] [REQUIRED ARGS FOR COMMAND] [OPTIONAL ARGS FOR COMMAND]
 
 Commands:
 
