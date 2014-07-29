@@ -61,6 +61,11 @@ If not using a python virtual environment, simply run **setup.py** ::
 	sudo python setup.py install
 
 
+Adding "fluxpy" to the Python Path
+----------------------------------
+
+    echo "/where/my/repo/lives/flux-python-api/" > my_new_virtualenv/lib/python2.7/site-packages/fluxpy.pth
+
 
 **Loading data**
 ================================
