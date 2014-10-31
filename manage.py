@@ -270,10 +270,13 @@ def _remove(collection_name):
 
     if (collection_name in db.collection_names() or
         collection_name in _return_id_list(db,'metadata') or
-        collection_name in _return_id_list(db,'coord_index')):
+        collection_name in _return_id_list(db,'coord_index') or
+        '_geom_' + collection_name in db.collection_names()):
+        
         db[collection_name].drop()
         db['metadata'].remove({'_id': collection_name})
         db['coord_index'].remove({'_id': collection_name})
+        db['_geom_' + collection_name].drop()
         
         print '\nCollection ID "{0}" successfully removed from ' \
               'database!\n'.format(collection_name)
@@ -303,7 +306,8 @@ def _rename(collection_name,new_name):
         
         # first create a temporary backup of the collection in case something fails
         orig_name = col + '_orig'
-        for x in db[col].find(): db[orig_name].insert(x)
+        for x in db[col].find():
+            db[orig_name].insert(x)
         
         # now attempt the rename
         try:
@@ -315,7 +319,8 @@ def _rename(collection_name,new_name):
         except:
             print 'Rename FAILED; restoring "{0}" table'.format(col)
             db[col].drop()
-            for x in db[orig_name].find(): db[col].insert(x)
+            for x in db[orig_name].find():
+                db[col].insert(x)
             traceback.print_exc()
         
         # and finally remove the temporary backup collection
