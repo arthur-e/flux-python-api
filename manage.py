@@ -193,6 +193,7 @@ def main(argv):
     
     try:
         opts, args = getopt.getopt(argv[1:],optstring_short,optstring_long)
+        
     except getopt.GetoptError, exc:
         print '\n' + exc.msg
         print "\nFor detailed usage info for the '{0}' command, use:\n" \
@@ -215,6 +216,7 @@ def main(argv):
                     kwargs[kwarg] = val
     
     for kwarg in kwargs:
+        
         if kwargs[kwarg] == True and kwarg not in bool_opts:
             print "\nRequired argument for command '{0}' is missing: --{1}" \
                   "\nFor detailed usage info, use:" \
@@ -362,7 +364,7 @@ def _list(list_ids='collections',include_counts=False):
 
     if list_ids in ['collections','']:
         for c in db.collection_names():
-            if c not in RESERVED_COLLECTION_NAMES + ('system.indexes',):
+            if c not in (RESERVED_COLLECTION_NAMES + ('system.indexes',)) and ('_geom' not in c):
                 print c + (' (%i' % db[c].count() + ' records)' if include_counts else '')
     else:
         for id in _return_id_list(db,list_ids):
@@ -399,8 +401,8 @@ def _audit():
     """
     
     db = _open_db_connection()
-    existing_collections = [c for c in db.collection_names() if c not in
-                            RESERVED_COLLECTION_NAMES + ('system.indexes',)]
+    existing_collections = [c for c in db.collection_names() if (c not in
+                            RESERVED_COLLECTION_NAMES + ('system.indexes',)) and ('_geom' not in c)]
     all_good = True
     
     for x in ['metadata','coord_index']:

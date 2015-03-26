@@ -461,7 +461,7 @@ class Unstructured3DMediator(Mediator):
         features = []
         for i, series in df.iterrows():
             data_dict = {
-                'timestamp': series['timestamp'].to_datetime(),
+                'timestamp': series['timestamp'] if type(series['timestamp'] <> 'datetime.datetime') else series['timestamp'].to_datetime(),
                 'coordinates': [series['x'], series['y']],
                 'properties': dict()
             }
@@ -470,6 +470,15 @@ class Unstructured3DMediator(Mediator):
                 data_dict['properties'][param] = series[param]
 
             features.append(data_dict)
+            
+        # Create the index of grid cell coordinates, if needed
+        if self.client[self.db_name]['coord_index'].find({
+            '_id': collection_name
+        }).count() == 0:
+            i = self.client[self.db_name]['coord_index'].insert({
+                '_id': collection_name,
+                'i': df.set_index(['x', 'y']).index.tolist()
+            })
 
         # If it's a collection, we can assume each data member is unique;
         #   we insert a single document
