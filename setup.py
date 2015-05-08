@@ -4,18 +4,18 @@ from setuptools import setup
 
 # Utility function to read the README file, used for long_description (which is used for PyPI documentation)
 def read(fname):
-    return open(os.path.join(os.path.dirname(__file__), fname)).read()        
+    return open(fname).read()        
  
 # Check if Linux and run setup.sh if so
 if 'Linux' in platform.platform():
-    os.system('./setup.sh')
+    os.system(os.path.join(os.path.dirname(__file__),'setup.sh'))
  
 ###############################
 # Run setuptools setup
 print 'Running python setup...'
  
 # get list of python dependencies
-with open('DEPENDENCIES.txt') as f:
+with open(os.path.join(os.path.dirname(__file__),'DEPENDENCIES.txt')) as f:
     required = f.read().splitlines()
 
 # Due to a bug having to do with install numpy via setuptools within a
@@ -27,10 +27,11 @@ for r in required:
         required.remove(r)
 os.system('pip install ' + numpy_req)
 
+os.chdir(os.path.dirname(__file__))
 
 setup(
       name='flux-python-api',
-      version=0.01,
+      version=0.22,
       author='K. Arthur Endsley',
       author_email='kaendsle@mtu.edu',
       description='Tools for loading Matlab/HDF5 data to Mongo DB',

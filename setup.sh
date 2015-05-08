@@ -2,11 +2,11 @@ echo "Linux OS detected; installing system dependencies (HDF5, libxml)..."
 sudo apt-get install python-dev libhdf5-serial-dev libxml2 libxml2-dev libxslt1-dev
 sudo apt-get install gfortran libopenblas-dev liblapack-dev # Required for scipy
 
-# For Ubuntu 12.04 (precise) only
+# For Ubuntu 14.04
 echo "Installing geospatial system dependencies (GEOS)..."
 sudo add-apt-repository ppa:ubuntugis/ubuntugis-unstable
 sudo apt-get update
-sudo apt-get install libgeos-3.3.8 libgeos-c1
+sudo apt-get install libgeos-3.4.2 libgeos-c1
 
 echo "Installing MongoDB..."
 sudo apt-key adv --keyserver keyserver.ubuntu.com --recv 7F0CEB10

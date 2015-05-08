@@ -23,13 +23,13 @@ But if you choose to put them elsewhere, just modify the variable on the first l
 **To install the Python API in a virtual environment:**
 
     $ VENV_DIR=/usr/local/pythonenv
-    $ virtualenv $VENV_DIR/fluxvis-env
-    $ source $VENV_DIR/fluxvis-env/bin/activate
+    $ virtualenv $VENV_DIR/flux-python-api-env
+    $ source $VENV_DIR/flux-python-api-env/bin/activate
     $ python setup.py install
 
 To put the `fluxpy` on your Python path:
 
-    $ echo "/usr/local/project/flux-python-api/" > /usr/local/pythonenv/fluxvis-env/lib/python2.7/site-packages/fluxpy.pth
+    $ echo "/usr/local/project/flux-python-api/" > /usr/local/pythonenv/flux-python-api-env/lib/python2.7/site-packages/fluxpy.pth
 
 ########################
 # API Quick References #

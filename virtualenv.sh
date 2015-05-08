@@ -1,1 +1,1 @@
-source /usr/local/pythonenv/fluxvis-env/bin/activate
+source /usr/local/pythonenv/flux-python-api-env/bin/activate
