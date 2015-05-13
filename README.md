@@ -1,3 +1,6 @@
+Carbon Data Explorer (Python API for Mongo DB)
+---------------------------------
+
 ##########################
 # Installation and Setup #
 ##########################
