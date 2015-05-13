@@ -5,19 +5,19 @@ from setuptools import setup
 # Utility function to read the README file, used for long_description (which is used for PyPI documentation)
 def read(fname):
     return open(fname).read()        
- 
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
 # Check if Linux and run setup.sh if so
 if 'Linux' in platform.platform():
-    os.system(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                           'setup.sh'))
+    os.system(os.path.join(current_dir,'setup.sh'))
  
 ###############################
 # Run setuptools setup
 print 'Running python setup...'
  
 # get list of python dependencies
-with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                       'DEPENDENCIES.txt')) as f:
+with open(os.path.join(current_dir,'DEPENDENCIES.txt')) as f:
     required = f.read().splitlines()
 
 # Due to a bug having to do with install numpy via setuptools within a
@@ -29,7 +29,7 @@ for r in required:
         required.remove(r)
 os.system('pip install ' + numpy_req)
 
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(current_dir)
 
 setup(
       name='flux-python-api',
