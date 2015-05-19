@@ -32,8 +32,8 @@ manage.py load
         -p, --path               Directory path of input file in Matlab (*.mat)
                                  or HDF5 (*.h5 or *.mat) format 
                                  
-        -n, --collection_name    Collection name for the input file (MongoDB
-                                 identifier)
+        -n, --collection_name    Provide a unique name for the dataset by which
+                                 it will be identified in the MongoDB
         
         -m, --model              fluxpy/models.py model associated with the
                                  input dataset  

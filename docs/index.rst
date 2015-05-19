@@ -13,6 +13,10 @@ Contents: Documentation on installing and using **flux-python-api**.
 
 **Installation and Setup**
 ================================
+If you're using flux-python-api as part of the **Carbon Data Explorer**
+package, you can ignore these installation steps; the **Carbon Data Explorer**
+setup script will take care of installation.
+
 Install Git, if need be::
 
 	sudo apt-get install git
@@ -31,16 +35,19 @@ Briefly, using `pip <http://www.pip-installer.org/en/latest/>`_::
 	[sudo] pip install virtualenv
 
 Then set up your **virtualenv**, e.g.::
-
-	cd /where/my/virtualenvs/live/
-	virtualenv my_new_virtualenv
+	
+	VENV_DIR=/usr/local/pythonenv
+        virtualenv $VENV_DIR/flux-python-api-env
+        source $VENV_DIR/flux-python-api-env/bin/activate
+        python setup.py install
+	
 	
 	# ensure the virtualenv is accessible to non-root users
-	sudo chmod -R 775 my_new_virtualenv
+	sudo chmod -R 775 $VENV_DIR/flux-python-api-env
 
 And activate::
 
-	source my_new_virtualenv/bin/activate
+	source $VENV_DIR/flux-python-api-env/bin/activate
 
 While your shell is activated, run **setup.py** (do **NOT** run as **sudo**)::
 
@@ -82,8 +89,8 @@ Loading with **manage.py load**::
         -p, --path               Directory path of input file in Matlab (*.mat)
                                  or HDF5 (*.h5 or *.mat) format 
                                  
-        -n, --collection_name    Collection name for the input file (MongoDB
-                                 identifier)
+        -n, --collection_name    Provide a unique name for the dataset by which
+                                 it will be identified in the MongoDB
         
         -m, --model              fluxpy/models.py model associated with the
                                  input dataset  
@@ -102,7 +109,7 @@ The configuration file
 ----------------------
 
 This utility requires that the input *\*.h5* or *\*.mat* file be accompanied by a JSON configuration file specifying required metadata parameters.
-By default, the utility will look for a *\*.json* file with the same name as the data file, but you can specify an alternate location when using **load.py** by using the **-c** option.
+By default, the utility will look for a *\*.json* file with the same name as the data file, but you can specify an alternate location by using the **-c** option.
 
 Configuration file parameter schema::
 
@@ -183,7 +190,7 @@ In the following example, the loader will look for a config file at ./data_casa_
 **Removing data**
 ================================
     
-Use the **manage.py remove** utility to remove data collections from the database.
+Use the **manage.py remove** utility to remove datasets from the database.
 
 ::
 
@@ -200,20 +207,20 @@ Use the **manage.py remove** utility to remove data collections from the databas
 	$ python manage.py remove -n casa_gfed_2004
 	
 
-**Renaming collections**
+**Renaming datasets**
 ================================
     
-Use the **manage.py rename** utility to rename data collections in the database.
+Use the **manage.py rename** utility to rename datasets in the database.
 
 .. WARNING::
-	It is important to use this utility for renaming rather than manually renaming collections by interfacing directly with MongoDB because several metadata tables require corresponding updates.
+	It is important to use this utility for renaming rather than manually renaming datasets by interfacing directly with MongoDB because several metadata tables require corresponding updates.
 
 ::
 
     $ manage.py rename -n <collection_name> -r <new_name>
         
     Required arguments:
-        -n, --collection_name    Collection name to be removed (MongoDB identifier)
+        -n, --collection_name    Name of the dataset name to be modified (MongoDB identifier)
         -r, --new_name           New name for the collection       
 
 *manage.py rename* example
