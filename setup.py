@@ -20,14 +20,28 @@ print 'Running python setup...'
 with open(os.path.join(current_dir,'DEPENDENCIES.txt')) as f:
     required = f.read().splitlines()
 
-# Due to a bug having to do with install numpy via setuptools within a
-# virtual environment, for now we remove numpy from the list and instead
-# install it via pip
-for r in required:
+# Due to a few bugs having to do with installing numpy via setuptools within a
+# virtual environment and h5py dependencies not installing correctly
+# (https://github.com/h5py/h5py/issues/535), for now we remove a few
+# from the list and instead install them separately ahead of time.
+for r in required[:]:
     if 'numpy' in r:
         numpy_req = r
         required.remove(r)
+    if 'Cython' in r:
+        cython_req = r
+        required.remove(r)
+    if 'h5py' in r:
+        h5py_req = r
+        required.remove(r)
+    if 'Shapely' in r:
+        shapely_req = r
+        required.remove(r)
+        
 os.system('pip install ' + numpy_req)
+os.system('pip install ' + cython_req)
+os.system('pip install ' + h5py_req)
+os.system('pip install ' + shapely_req)
 
 os.chdir(current_dir)
 
