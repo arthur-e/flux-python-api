@@ -1,7 +1,7 @@
-Carbon Data Explorer Python API ("flux-python-api")
-==================================================
+Carbon Data Explorer Python API
+===============================
 
-The **Carbon Data Explorer**'s Python API for MongoDB ("flux-python-api")
+The **Carbon Data Explorer**'s Python API for MongoDB ("flux-python-api").
 
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
 
