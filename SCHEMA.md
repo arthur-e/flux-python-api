@@ -2,72 +2,41 @@
 # Metadata Schema #
 ###################
 
-Last updated: May 23, 2014.
+Last updated: June 4, 2015.
 
 ########################################
 ## Required Parameters for Web Client ##
 
 ```
 {
-    "_id": String,
+    "columns": [String],        // Array of well-known column identifiers, in order
+                                // e.g. "x", "y", "value", "error"
 
-    "dates": [String],          // Array of dates denoting the start and end
-                                // and any time the interval or range changes
-                                // between the start and end
-
-    "gridded": Boolean,         // Indicates the data are on a grid
-
-    "grid": {                   // Grid resolution, if data are gridded
-
-        "units": ("degrees"|"meters"),
-
-        "x": Number,            // Grid resolution in the x-direction
-
-        "y": Number             // Grid resolution in the y-direction
-
+    "gridres": {
+        "units": String,        // Grid cell units 
+        "x": Number,            // Grid cell resolution in the x direction
+        "y": Number             // Grid cell resolution in the y direction
     },
+        
+    "header": [String],         // Array of human-readable column headers, in order
 
-    "bboxmd5": String,          // MD5 Hash
+    "parameters": [String],     // Array of well-known variable names e.g.
+                                // "values", "value", "errors" or "error"
 
-    "bbox": [Number() minx, miny, maxx, maxy],
+    "span": String,             // The length of time, as a Pandas "freq" code, 
+                                // that an observation spans
 
-    "precision": Number,        // Used with univariate (single-valued) input
-                                //  i.e. only one variable in input data;
-                                //  the decimal precision to apply to the "values"
-                                //  and "errors" parameters, if not specified
-                                //  elsewhere
+    "step": Number,             // The length of time, in seconds, between each
+                                // observation to be imported
 
-    "stats": {                  // Summary statistics for the population
-        "values": {             //  of each parameter; must include the "values"
-            "std": Number,      //  parameter but can optionally include others
-            "max": Number,
-            "min": Number,
-            "median": Number,
-            "mean": Number
-        },
-        "errors": {
-            ...
-        }
-    },
+    "timestamp": String,        // An ISO 8601 timestamp for the first observation
 
-    "spans": [String],          // Array of lengths of time, in seconds,
-                                // that each observation spans; there is more than
-                                // one in this list of the span changes at a
-                                // corresponding data in the "dates" Array
+    "title": String,            // Human-readable "pretty" name for the data set 
+    
+    "units": Object,            // The measurement units, per parameter
 
-    "steps": [Number],          // Array of lengths of time in seconds
-                                // between each observation
-
-    "uncertainty": {            // Indicates that uncertainty data exist
-
-        "embedded": Boolean,    // They are alongside the data values?
-
-        "uri": String           // Or they are available at this URI
-
-    },
-
-    "units": Object            // The measurement units, per parameter
-
+    "var_name": String          // The name of the variable in the hierarchical
+                                // file which stores the data
 }
 ```
 
@@ -138,7 +107,7 @@ the data model (TransformationInterface) is compatible.
 
     "timestamp": String,        // An ISO 8601 timestamp for the first observation
 
-    "title": String,			// Human-readable "pretty" name for the data set 
+    "title": String,                    // Human-readable "pretty" name for the data set 
     
     "units": Object,            // The measurement units, per parameter
 
@@ -147,5 +116,3 @@ the data model (TransformationInterface) is compatible.
 
 }
 ```
-
-
