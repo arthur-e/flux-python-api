@@ -76,6 +76,8 @@ if __name__ == '__main__':
     # To import the 2004 CASA GFED run...
     if sys.argv[1] == 'casa_gfed_2004':
         path = '/net/nas3/data/gis_lab/project/NASA_ACOS_Visualization/Data/from_Vineet/data_casa_gfed_3hrly.mat'
+        if len(sys.argv) > 2:
+            path = sys.argv[2]
         inst = SpatioTemporalMatrix(path, timestamp='2003-12-22T03:00:00',
             var_name='casa_gfed_2004', title='Surface Carbon Flux')
         mediator = Grid4DMediator().save('casa_gfed_2004', inst)
@@ -94,5 +96,3 @@ if __name__ == '__main__':
         path = '/net/nas3/data/gis_lab/project/NASA_ACOS_Visualization/Data/xco2/Kriged_20090615_20090620.mat'
         inst = KrigedXCO2Matrix(path)
         mediator = Grid3DMediator().save('test_r2_xco2', inst)
-
-
