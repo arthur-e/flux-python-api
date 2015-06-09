@@ -2,6 +2,7 @@ Carbon Data Explorer Python API
 ===============================
 
 The **Carbon Data Explorer**'s Python API for MongoDB ("flux-python-api").
+The Carbon Data Explorer has been tested with MongoDB 1.4.9.
 
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
 
