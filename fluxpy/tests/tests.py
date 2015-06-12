@@ -27,7 +27,8 @@ class TestManage(unittest.TestCase):
         
     def test_load_command(self):
         '''
-        Tests that command line manage.py load utility properly loads data and transfers config_file override options to database
+        Tests that command line manage.py load utility properly loads data and 
+        transfers config_file override options to database
         '''
     
         # remove any stale test data
@@ -83,7 +84,7 @@ class TestManage(unittest.TestCase):
         self.assertGreater(len(result.split('casa_gfed_load_test')),1)
 
         # check that the metadata is returned as expected
-        cmd = 'python ../../manage.py db -n casa_gfed_load_test'
+        cmd = 'python ../../manage.py db -n casa_gfed_load_test'                   
         result = ast.literal_eval(subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).replace('\n',''))
         meta = self.db['metadata'].find({'_id': 'casa_gfed_load_test'})[0]
         self.assertDictEqual(result, meta)
@@ -189,11 +190,11 @@ class TestSpatioTemporalMatrixes(unittest.TestCase):
     def test_model_describe(self):
         '''Should produce metadata for a SpatioTemporalMatrix model instance'''
         flux = SpatioTemporalMatrix(os.path.join(self.path, 'casagfed2004.mat'),
-            timestamp='2004-06-30T00:00:00', var_name='test',span=10800)
+            timestamp='2004-06-30T00:00:00', var_name='casa_gfed_2004',span=10800)
          
         df = flux.describe()
-        self.assertEqual(df['bbox'], (-166.5, 60.5, -163.5, 68.5))
-        self.assertEqual(df['bboxmd5'], '51d5738489b4ae4fa8623f867de527ce')
+        self.assertEqual(df['bbox'], (-166.5, 10.5, -50.5, 69.5))
+        self.assertEqual(df['bboxmd5'], '6f3e33c145010bc74c5ccd3ba772f504')
         self.assertEqual(df['dates'], ['2004-06-30T00:00:00', '2004-06-30T21:00:00'])
         self.assertEqual(df['gridded'], True)
         self.assertEqual(df['grid'], {'units': 'degrees', 'x': 1.0, 'y': 1.0})
@@ -202,30 +203,30 @@ class TestSpatioTemporalMatrixes(unittest.TestCase):
     def test_model_extract(self):
         '''Should extract a DataFrame in an SpatioTemporalMatrix model instance'''
         flux = SpatioTemporalMatrix(os.path.join(self.path, 'casagfed2004.mat'),
-            timestamp='2004-06-30T00:00:00', var_name='test')
+            timestamp='2004-06-30T00:00:00', var_name='casa_gfed_2004')
  
         df = flux.extract()
-        self.assertEqual(df.shape, (10, 8))
+        self.assertEqual(df.shape, (2635, 8))
         self.assertEqual(str(df.columns[1]), '2004-06-30 03:00:00')
         self.assertEqual(df.index.values[1], (-165.5, 61.5))
  
     def test_save_to_db(self):
         '''Should successfully save proper data representation to database'''
         flux = SpatioTemporalMatrix(os.path.join(self.path, 'casagfed2004.mat'),
-            timestamp='2004-06-30T00:00:00', var_name='test')
+            timestamp='2004-06-30T00:00:00', var_name='casa_gfed_2004')
  
         self.mediator.save('test3', flux)
         query = self.mediator.client[self.mediator.db_name]['test3'].find({
             '_id': datetime.datetime(2004, 6, 30, 0, 0, 0),
         })
-        self.assertEqual(len(query[0]['values']), 10)
+        self.assertEqual(len(query[0]['values']), 2635)
         self.assertEqual(query[0]['values'][0], 0.08)
  
         # Test the mediator's summarize() method
         summary = self.mediator.summarize('test3')
  
         self.assertEqual(summary.keys(), ['values'])
-        print summary['values'].keys()
+        #print summary['values'].keys()
         self.assertEqual(summary['values'].keys(), [
             'std', 'max', 'min', 'median', 'mean'
         ])
@@ -269,7 +270,6 @@ class TestXCO2Data(unittest.TestCase):
             timestamp='2009-06-15')
  
         self.assertEqual(xco2.var_name, 'XCO2')
-        self.assertEqual(xco2.spans, [518400])
         self.assertEqual(xco2.timestamp, '2009-06-15')
          
     def test_model_extract(self):
