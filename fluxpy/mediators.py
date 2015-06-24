@@ -1,7 +1,7 @@
 #===============================================================================
 # Example data:
 # /ws4/idata/fluxvis/casa_gfed_inversion_results/1.zerofull_casa_1pm_10twr/Month_Uncert1.mat
-# 
+#
 # from fluxpy.mediators import *
 # from fluxpy.models import *
 # mediator = Grid3DMediator()
@@ -132,9 +132,9 @@ class Mediator(object):
         Creates an entry in the metadata collection for this instance of data;
         updates the summary statistics of that entry if it already exists.
         '''
-        
+
         if verbose: sys.stderr.write('\nGenerating metadata...')
-        
+
         # Get the metadata
         metadata = instance.describe()
 
@@ -229,12 +229,12 @@ class Grid4DMediator(Mediator):
         cursor = self.client[self.db_name][collection_name].find(query, {
             'values': 1,
         })
-        
+
         # Create an n x 2 matrix of the longitude-latitude coordinates
         coords = np.array(self.client[self.db_name]['coord_index'].find({
             '_id': collection_name
         }).next()['i'])
-        
+
         # Create a DataFrame of longitude-latitude coordinates
         coords = pd.DataFrame(coords, columns=('x', 'y'))
 
@@ -285,7 +285,7 @@ class Grid4DMediator(Mediator):
                     '_id': timestamp,
                     'values': series.tolist()
                 })
-                
+
             if verbose: sys.stderr.write('\rInserted %d of %d records...'
                                  % (i+1, total_records))
 
@@ -336,12 +336,12 @@ class Grid3DMediator(Mediator):
             'values': 1,
             'errors': 1,
         })
-        
+
         # Create an n x 2 matrix of the longitude-latitude coordinates
         coords = np.array(self.client[self.db_name]['coord_index'].find({
             '_id': collection_name
         }).next()['i'])
-        
+
         # Create a DataFrame of longitude-latitude coordinates
         coords = pd.DataFrame(coords, columns=('x', 'y'))
 
@@ -357,7 +357,7 @@ class Grid3DMediator(Mediator):
                 coords,
                 pd.concat([values, errors], axis=1)
             ], axis=1)
-            
+
             frames.append(df)
             ids.append(record.get('_id'))
 
@@ -411,7 +411,7 @@ class Grid3DMediator(Mediator):
 
             else:
                 data_dict[param] = df[param].tolist()
-                
+
         if verbose: sys.stderr.write('\nInserting records...')
 
         self.client[self.db_name][collection_name].insert(data_dict)
@@ -446,12 +446,20 @@ class Unstructured3DMediator(Mediator):
         }])
 
         series = []
-        aggregate = result['result'][0]
+
+        try:
+            # As of pymongo 2.7.x
+            aggregate = result['result'][0]
+
+        # For pymongo 3.x compatibility
+        except TypeError:
+            aggregate = result.next()
+
         for param in aggregate.keys():
             series.append(pd.Series(aggregate[param], name=param))
 
         return pd.concat(series, axis=1)
-    
+
     def save(self, collection_name, instance, verbose=False):
         super(Unstructured3DMediator, self).save(collection_name, instance)
 
@@ -470,7 +478,7 @@ class Unstructured3DMediator(Mediator):
                 data_dict['properties'][param] = series[param]
 
             features.append(data_dict)
-            
+
         # Create the index of grid cell coordinates, if needed
         if self.client[self.db_name]['coord_index'].find({
             '_id': collection_name
@@ -500,6 +508,3 @@ class Unstructured3DMediator(Mediator):
                     sys.stderr.write('\rInserted %d of %d records...' % (i + 1, total_records))
 
         self.generate_metadata(collection_name, instance)
-
-
-
