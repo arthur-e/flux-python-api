@@ -87,9 +87,8 @@ Use the `manage.py` utility to interact with the `Carbon Data Explorer` MongoDB 
 
 Note: **MongoDB** uses the term *collections* to refer to what most other databases usually call *tables*; hence the references to "collections" in the following documentation.
 
-
-Loading data
-------------------------
+Loading Data
+------------
 
 Use the `manage.py load` utility to load geospatial data from files that are in **Matlab** (`*.mat`) or **HDF5** (`*.h5` or `*.mat`) format. A description of the required configuration file and examples are provided in the next sections.
 
@@ -119,7 +118,7 @@ Loading with `manage.py load`:
                                     e.g.: -o "title=MyData;gridres={'units':'degrees,'x':1.0,'y':1.0}"
 
 
-### The configuration file
+### The Configuration File
 
 This utility requires that the input `*.h5` or `*.mat` file be accompanied by a **JSON configuration file** specifying required metadata parameters.
 By default, the utility will look for a `*.json` file with the same name as the data file, but you can specify an alternate location by using the `-c` option.
@@ -183,7 +182,7 @@ The contents of an **example configuration file** are shown here:
 
 
 
-### `manage.py load` examples
+### `manage.py load` Examples
 
 This is the most basic example; it assumes a configuration file exists at `./mydata/data_casa_gfed_3hrly.json`:
 
@@ -198,9 +197,8 @@ In the following example, the loader will look for a config file at `./data_casa
     $ python manage.py load -p ./data_casa_gfed.mat -m SpatioTemporalMatrix -n casa_gfed_2004 -o "timestamp=2003-12-22T03:00:00;var_name=casa_gfed_2004"
 
 
-
-Removing datasets
-------------------------
+Removing Datasets
+-----------------
 
 Use the `manage.py remove` utility to remove datasets from the database.
 
@@ -214,8 +212,7 @@ Use the `manage.py remove` utility to remove datasets from the database.
     $ python manage.py remove -n casa_gfed_2004
 
 
-
-Renaming datasets
+Renaming Datasets
 -----------------
 
 Use the `manage.py rename` utility to rename datasets in the database.
@@ -234,8 +231,8 @@ Use the `manage.py rename` utility to rename datasets in the database.
     $ python manage.py rename -n casa_gfed_2004 -r casa_2004
 
 
-Database diagnostics
-------------------------
+Database Diagnostics
+--------------------
 
 Use the `manage.py db` utility to get diagnostic information on database contents:
 
@@ -264,7 +261,7 @@ Use the `manage.py db` utility to get diagnostic information on database content
                                 dataset. Valid only with a corresponding
                                 "-l collections" flag; ignored otherwise
 
-### `manage.py db` examples
+### `manage.py db` Examples
 
 List all datasets and their number of records:
 
@@ -315,7 +312,7 @@ here is the process for loading these data into the MongoDB database.
 
 
 Loading Data with a Suite
-----------------------------
+-------------------------
 
 Sometimes, a dataset is more complicated than currently defined Models and Mediators are designed to handle.
 For complicated use cases or bulk imports, a `Suite` class is available as a demonstration in the `utils` module.
@@ -335,3 +332,52 @@ For example, if you need to calculate something based on all of the files before
         for each in files_to_be_imported:
             instance = self.model(each)
             self.mediator.save(collection_name, each, bulk_property=result)
+
+* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+
+API Documentation
+=================
+
+The transformation of data from binary or hierarchical flat files to a database representation is facilitated by two Python classes, Models and Mediators, which are loosely based on the Transformation Interface described by Andy Bulka (2001).
+The Model (`TransformationInterface`) class is a data model that describes what a scientific dataset looks like; whether it is a time series of gridded maps or a covariance matrix, for instance.
+The Mediator class describes how a given Model should be read from and the data it contains translated to a database representation.
+Some basic Mediator and Model classes are already provided in `mediators.py` and `models.py`, respectively.
+If the included classes do not fit your needs (do not fit the format of your data), you can create Mediator and Model subclasses.
+This is described below.
+
+Creating a Custom Data Model (Transformation Interface Subclass)
+----------------------------------------------------------------
+
+A `TransformationInterface` subclass should provide the following methods (if they differ in function from the default behavior).
+Some of these methods are (implied to be) private, however, you may need to override them for special file types.
+Private methods include:
+
+* `__init__`: The only thing the subclass' init method should do is set default metadata values, e.g.:
+
+    self.precision = 2
+    self.columns = ['x', 'y']
+    self.formats = {
+        'x': '%.5f',
+        'y': '%.5f'
+    }
+
+* `__open__`: A method which takes a file path and an optional variable name (if the file works like a key-value store, as HDF and Matlab files do). This method should set the `file` and `file_handler` instance attributes; `file` should be a reference to the opened file (by calling the `file_handler` method).
+
+The only two public methods that are required are `describe()` and `extract()`:
+
+* `describe()`: A method which generates metadata for a given file. This method should set and return the instance `__metadata__` attribute.
+* `extract()`: A method which "extracts" data from the file; it should return a pandas data frame of the data in a tabular format that is expected by the `Mediator` instance you intend to give it to (the `Mediator` instance takes your `TransformationInterface` instance (or subclass instance) and sticks the data it contains in the database).
+
+Creating a Custom Mediator (Mediator Subclass)
+----------------------------------------------
+
+A `Mediator` subclass is more complicated.
+It can provide, but is not required to provide, methods for reading data from the database and creating a `TransformationInterface` class or subclass instance that contains the data.
+Normally, it is used to read such an instance and put the data in the database.
+Public methods should include:
+
+* `load()`: If you wish to be able to read data from the database and create a `TransformationInterface` class or subclass instance (one step towards writing a file from the database), you will need to provide this method, which reads out data from the database.
+* `copy_grid_geometry()`: For gridded data only: Inserts the grid geometry into the database.
+* `generate_metadata()`: Creates an entry in the metadata collection for this instance of data; updates the summary statistics of that entry if it already exists.
+* `save()`: Creates new records in the database for the data contained in a provided `TransformationInterface` instance or subclass instance.
+* `summarize()`: Generates summary statistics by parameter over the data in a collection; updates these summary statistics when new records are added to an existing dataset (scenario).
