@@ -2,7 +2,7 @@ Carbon Data Explorer Python API
 ===============================
 
 The **Carbon Data Explorer**'s Python API for MongoDB ("flux-python-api").
-The Carbon Data Explorer has been tested with MongoDB versions 1.4.9 and 2.4.14; it should be compatiable with all 1.x and 2.x versions of MongoDB.
+The Carbon Data Explorer has been tested with MongoDB versions 1.4.9, 2.4.14, and 3.0.2; it should be compatiable with all 1.x, 2.x, and 3.x versions of MongoDB.
 
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
